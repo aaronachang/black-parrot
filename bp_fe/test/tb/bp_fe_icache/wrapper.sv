@@ -16,24 +16,24 @@ module wrapper
 
    , localparam cfg_bus_width_lp = `bp_cfg_bus_width(vaddr_width_p, hio_width_p, core_id_width_p, cce_id_width_p, lce_id_width_p)
    )
-  (input                                     clk_i
-   , input                                   reset_i
+  (input                                         clk_i
+   , input                                       reset_i
 
-   , input [cfg_bus_width_lp-1:0]            cfg_bus_i
+   , input [cfg_bus_width_lp-1:0]                cfg_bus_i
 
-   , input [vaddr_width_p-1:0]               vaddr_i
-   , input                                   vaddr_v_i
-   , output                                  vaddr_ready_o
+   , input [vaddr_width_p-1:0]                   vaddr_i
+   , input                                       vaddr_v_i
+   , output                                      vaddr_ready_o
 
-   , input [ptag_width_p-1:0]                ptag_i
-   , input                                   ptag_v_i
+   , input [ptag_width_p-1:0]                    ptag_i
+   , input                                       ptag_v_i
 
-   , input                                   ptag_uncached_i
-   , input                                   ptag_nonidem_i
-   , input                                   ptag_dram_i
+   , input                                       ptag_uncached_i
+   , input                                       ptag_nonidem_i
+   , input                                       ptag_dram_i
 
-   , output [instr_width_gp-1:0]             data_o
-   , output                                  data_v_o
+   , output [instr_width_gp-1:0]                 data_o
+   , output                                      data_v_o
 
    , output logic [mem_fwd_header_width_lp-1:0]  mem_fwd_header_o
    , output logic [l2_data_width_p-1:0]          mem_fwd_data_o
