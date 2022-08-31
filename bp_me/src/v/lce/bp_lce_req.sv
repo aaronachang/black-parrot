@@ -162,7 +162,7 @@ module bp_lce_req
      ,.msg_data_ready_and_i(lce_req_data_ready_and_i)
      ,.msg_last_o(lce_req_last_o)
 
-     ,.fsm_base_header_i(fsm_req_header_lo)
+     ,.fsm_header_i(fsm_req_header_lo)
      ,.fsm_data_i(fsm_req_data_lo)
      ,.fsm_v_i(fsm_req_v_lo)
      ,.fsm_ready_and_o(fsm_req_ready_and_li)

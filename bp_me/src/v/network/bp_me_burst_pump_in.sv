@@ -66,12 +66,12 @@ module bp_me_burst_pump_in
    , input                                          msg_last_i
 
    // FSM consumer side
-   , output logic [xce_header_width_lp-1:0]         fsm_base_header_o
+   , output logic [xce_header_width_lp-1:0]         fsm_header_o
    , output logic [stream_cnt_width_lp-1:0]         fsm_cnt_o 
    , output logic [paddr_width_p-1:0]               fsm_addr_o
    , output logic [stream_data_width_p-1:0]         fsm_data_o
    , output logic                                   fsm_v_o
-   , input                                          fsm_ready_and_i
+   , input                                          fsm_yumi_i
    // FSM control signals
    // fsm_new is raised on first beat of every message
    , output logic                                   fsm_new_o
@@ -81,7 +81,7 @@ module bp_me_burst_pump_in
 
   `declare_bp_bedrock_if(paddr_width_p, payload_width_p, lce_id_width_p, lce_assoc_p, xce);
   `bp_cast_i(bp_bedrock_xce_header_s, msg_header);
-  `bp_cast_o(bp_bedrock_xce_header_s, fsm_base_header);
+  `bp_cast_o(bp_bedrock_xce_header_s, fsm_header);
 
   enum logic [1:0]{e_ready, e_spray, e_burst} state_n, state_r;
   wire is_ready = (state_r == e_ready);
@@ -140,7 +140,7 @@ module bp_me_burst_pump_in
     (.clk_i(clk_i)
      ,.reset_i(reset_i)
 
-     ,.en_i(fsm_ready_and_i & fsm_v_o)
+     ,.en_i(fsm_yumi_i)
      ,.size_i(stream_size)
      ,.base_i(msg_header_li.addr)
 
@@ -157,7 +157,7 @@ module bp_me_burst_pump_in
     begin
 		  state_n = state_r;
 
-			fsm_base_header_cast_o = msg_header_li;
+			fsm_header_cast_o = msg_header_li;
 		  fsm_data_o = msg_data_li;
 
 			fsm_v_o = '0;
@@ -173,10 +173,10 @@ module bp_me_burst_pump_in
             fsm_v_o            = read_v_li | write_v_li;
             fsm_new_o          = fsm_v_o;
             fsm_last_o         = (read_v_li & ~do_spray) || (write_v_li & ~do_burst);
-            msg_header_yumi_lo = fsm_ready_and_i & fsm_v_o & fsm_new_o & fsm_last_o;
-            msg_data_yumi_lo   = fsm_ready_and_i & fsm_v_o & msg_has_data_li;
+            msg_header_yumi_lo = fsm_yumi_i & fsm_new_o & fsm_last_o;
+            msg_data_yumi_lo   = fsm_yumi_i & msg_has_data_li;
 
-					  state_n = (fsm_ready_and_i & fsm_v_o)
+					  state_n = fsm_yumi_i
                       ? do_burst
                         ? e_burst
                         : do_spray
@@ -188,7 +188,7 @@ module bp_me_burst_pump_in
 				  begin
             fsm_v_o            = msg_data_v_li;
             fsm_last_o         = last_lo;
-            msg_data_yumi_lo   = fsm_ready_and_i & fsm_v_o;
+            msg_data_yumi_lo   = fsm_yumi_i;
             msg_header_yumi_lo = msg_data_yumi_lo & msg_last_li;
 
 					  state_n = msg_header_yumi_lo ? e_ready : e_burst;
@@ -197,7 +197,7 @@ module bp_me_burst_pump_in
           begin
             fsm_v_o            = msg_header_v_li;
             fsm_last_o         = last_lo;
-            msg_header_yumi_lo = fsm_ready_and_i & fsm_v_o & last_lo;
+            msg_header_yumi_lo = fsm_yumi_i & last_lo;
 
             state_n = msg_header_yumi_lo ? e_ready : e_spray;
           end

@@ -172,12 +172,12 @@ module bp_lce_cmd
      ,.msg_data_ready_and_o(lce_cmd_data_ready_and_o)
      ,.msg_last_i(lce_cmd_last_i)
 
-     ,.fsm_base_header_o(fsm_cmd_header_li)
+     ,.fsm_header_o(fsm_cmd_header_li)
      ,.fsm_addr_o(fsm_cmd_addr_li)
      ,.fsm_cnt_o(fsm_cmd_cnt_li)
      ,.fsm_data_o(fsm_cmd_data_li)
      ,.fsm_v_o(fsm_cmd_v_li)
-     ,.fsm_ready_and_i(fsm_cmd_yumi_lo)
+     ,.fsm_yumi_i(fsm_cmd_yumi_lo)
      ,.fsm_new_o(fsm_cmd_new_li)
      ,.fsm_last_o(fsm_cmd_last_li)
      );
@@ -219,7 +219,7 @@ module bp_lce_cmd
      ,.msg_data_ready_and_i(lce_fill_data_ready_and_i)
      ,.msg_last_o(lce_fill_last_o)
 
-     ,.fsm_base_header_i(fsm_fill_header_lo)
+     ,.fsm_header_i(fsm_fill_header_lo)
      ,.fsm_data_i(fsm_fill_data_lo)
      ,.fsm_v_i(fsm_fill_v_lo)
      ,.fsm_ready_and_o(fsm_fill_ready_and_li)
@@ -254,7 +254,7 @@ module bp_lce_cmd
      ,.msg_data_ready_and_i(lce_resp_data_ready_and_i)
      ,.msg_last_o(lce_resp_last_o)
 
-     ,.fsm_base_header_i(fsm_resp_header_lo)
+     ,.fsm_header_i(fsm_resp_header_lo)
      ,.fsm_data_i(fsm_resp_data_lo)
      ,.fsm_v_i(fsm_resp_v_lo)
      ,.fsm_ready_and_o(fsm_resp_ready_and_li)

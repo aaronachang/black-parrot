@@ -62,9 +62,9 @@ module bp_me_burst_pump_out
    , output logic                                   msg_last_o
 
    // FSM producer side
-   // FSM must hold fsm_base_header_i constant throughout the transaction
+   // FSM must hold fsm_header_i constant throughout the transaction
    // (i.e., through cycle fsm_last_o is raised)
-   , input        [xce_header_width_lp-1:0]         fsm_base_header_i
+   , input        [xce_header_width_lp-1:0]         fsm_header_i
    , input        [stream_data_width_p-1:0]         fsm_data_i
    , input                                          fsm_v_i
    , output logic                                   fsm_ready_and_o
@@ -79,17 +79,17 @@ module bp_me_burst_pump_out
    );
 
   `declare_bp_bedrock_if(paddr_width_p, payload_width_p, lce_id_width_p, lce_assoc_p, xce);
-  `bp_cast_i(bp_bedrock_xce_header_s, fsm_base_header);
+  `bp_cast_i(bp_bedrock_xce_header_s, fsm_header);
   `bp_cast_o(bp_bedrock_xce_header_s, msg_header);
   
   enum logic [1:0] {e_ready, e_burst, e_aggregate} state_n, state_r;
   wire is_ready     = (state_r == e_ready);
   wire is_burst     = (state_r == e_burst);
   wire is_aggregate = (state_r == e_aggregate);
-  wire fsm_stream = fsm_stream_mask_p[fsm_base_header_cast_i.msg_type];
+  wire fsm_stream = fsm_stream_mask_p[fsm_header_cast_i.msg_type];
 
   wire [stream_cnt_width_lp-1:0] stream_size = fsm_stream
-    ? `BSG_MAX((1'b1 << fsm_base_header_cast_i.size) / stream_bytes_lp, 1'b1) - 1'b1
+    ? `BSG_MAX((1'b1 << fsm_header_cast_i.size) / stream_bytes_lp, 1'b1) - 1'b1
     : '0;
 
   logic first_lo, last_lo;
@@ -104,7 +104,7 @@ module bp_me_burst_pump_out
  
      ,.en_i(fsm_ready_and_o & fsm_v_i)
      ,.size_i(stream_size)
-     ,.base_i(fsm_base_header_cast_i.addr)
+     ,.base_i(fsm_header_cast_i.addr)
  
      ,.addr_o()
      ,.cnt_o(fsm_cnt_o)
@@ -119,7 +119,7 @@ module bp_me_burst_pump_out
     (.clk_i(clk_i)
      ,.reset_i(reset_i)
 
-     ,.data_i({fsm_stream, fsm_base_header_cast_i})
+     ,.data_i({fsm_stream, fsm_header_cast_i})
      ,.v_i(header_v_li)
      ,.ready_o(header_ready_lo)
 
