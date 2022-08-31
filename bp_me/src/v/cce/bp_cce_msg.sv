@@ -429,7 +429,7 @@ module bp_cce_msg
 
                 // decrement pending bit on mem response dequeue
                 pending_w_v_o = mem_rev_yumi_o;
-                pending_w_addr_o = mem_rev_header_li.addr;
+                pending_w_addr_o = mem_rev_header_cast_i.addr;
                 pending_o = 1'b0;
                 // if first beat is not last, drain remaining beats
                 mem_rev_state_n = (mem_rev_yumi_o & ~mem_rev_last_i)
