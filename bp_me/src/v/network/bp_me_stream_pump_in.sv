@@ -177,7 +177,6 @@ module bp_me_stream_pump_in
           cnt_up = fsm_yumi_i;
           fsm_addr_o = wrap_addr;
         end
-
     end
 
   // parameter checks
