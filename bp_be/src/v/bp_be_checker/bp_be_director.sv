@@ -65,7 +65,7 @@ module bp_be_director
 
   // Cast input and output ports
   bp_fe_cmd_s                      fe_cmd_li;
-  logic                            fe_cmd_v_li, fe_cmd_ready_lo;
+  logic                            fe_cmd_v_li;
   bp_fe_cmd_pc_redirect_operands_s fe_cmd_pc_redirect_operands;
 
   // Declare intermediate signals
@@ -123,7 +123,7 @@ module bp_be_director
         e_run   : state_n = commit_pkt_cast_i.wfi ? e_wait : fe_cmd_nonattaboy_v ? e_fence : e_run;
         e_fence : state_n = cmd_empty_n_o ? e_run : e_fence;
         // e_freeze:
-        default : state_n = freeze_li ? e_freeze : e_wait;
+        default : state_n = fe_cmd_v_li ? e_run : e_freeze;
       endcase
     end
 
@@ -154,7 +154,7 @@ module bp_be_director
           fe_cmd_pc_redirect_operands.translation_en = commit_pkt_cast_i.translation_en_n;
           fe_cmd_li.operands.pc_redirect_operands    = fe_cmd_pc_redirect_operands;
 
-          fe_cmd_v_li = fe_cmd_ready_lo;
+          fe_cmd_v_li = is_freeze;
         end
       else if (commit_pkt_cast_i.itlb_fill_v)
         begin
@@ -164,14 +164,14 @@ module bp_be_director
           fe_cmd_li.operands.itlb_fill_response.pte_leaf = commit_pkt_cast_i.pte_leaf;
           fe_cmd_li.operands.itlb_fill_response.instr    = commit_pkt_cast_i.instr;
 
-          fe_cmd_v_li = fe_cmd_ready_lo;
+          fe_cmd_v_li = is_run;
         end
       else if (commit_pkt_cast_i.sfence)
         begin
           fe_cmd_li.opcode = e_op_itlb_fence;
           fe_cmd_li.npc = commit_pkt_cast_i.npc;
 
-          fe_cmd_v_li = fe_cmd_ready_lo;
+          fe_cmd_v_li = is_run;
         end
       else if (commit_pkt_cast_i.csrw)
         begin
@@ -181,30 +181,30 @@ module bp_be_director
           fe_cmd_pc_redirect_operands.translation_en  = commit_pkt_cast_i.translation_en_n;
           fe_cmd_li.operands.pc_redirect_operands     = fe_cmd_pc_redirect_operands;
 
-          fe_cmd_v_li = fe_cmd_ready_lo;
+          fe_cmd_v_li = is_run;
         end
       else if (commit_pkt_cast_i.wfi)
         begin
           fe_cmd_li.opcode = e_op_wait;
           fe_cmd_li.npc = commit_pkt_cast_i.npc;
 
-          fe_cmd_v_li = fe_cmd_ready_lo;
+          fe_cmd_v_li = is_run;
         end
       else if (commit_pkt_cast_i.fencei)
         begin
           fe_cmd_li.opcode = e_op_icache_fence;
           fe_cmd_li.npc = commit_pkt_cast_i.npc;
 
-          fe_cmd_v_li = fe_cmd_ready_lo;
+          fe_cmd_v_li = is_run;
         end
       else if (commit_pkt_cast_i.icache_miss)
         begin
           // TODO: restart vs resume
           fe_cmd_li.opcode = e_op_icache_fill_restart;
-          fe_cmd_li.npc = commit_pkt_cast_i.npc;
+          fe_cmd_li.npc = commit_pkt_cast_i.pc;
           fe_cmd_li.operands.icache_fill_response.instr = commit_pkt_cast_i.instr;
 
-          fe_cmd_v_li = fe_cmd_ready_lo;
+          fe_cmd_v_li = is_run;
         end
       else if (commit_pkt_cast_i.eret)
         begin
@@ -215,18 +215,18 @@ module bp_be_director
           fe_cmd_pc_redirect_operands.translation_en       = commit_pkt_cast_i.translation_en_n;
           fe_cmd_li.operands.pc_redirect_operands          = fe_cmd_pc_redirect_operands;
 
-          fe_cmd_v_li = fe_cmd_ready_lo;
+          fe_cmd_v_li = is_run;
         end
       else if (commit_pkt_cast_i.exception | commit_pkt_cast_i._interrupt | (is_wait & irq_waiting_i))
         begin
           fe_cmd_li.opcode                                 = e_op_pc_redirection;
           fe_cmd_li.npc                                    = commit_pkt_cast_i.npc;
-          fe_cmd_pc_redirect_operands.subopcode            = e_subop_trap;
+          fe_cmd_pc_redirect_operands.subopcode            = commit_pkt_cast_i.exception ? e_subop_trap : e_subop_interrupt;
           fe_cmd_pc_redirect_operands.priv                 = commit_pkt_cast_i.priv_n;
           fe_cmd_pc_redirect_operands.translation_en       = commit_pkt_cast_i.translation_en_n;
           fe_cmd_li.operands.pc_redirect_operands          = fe_cmd_pc_redirect_operands;
 
-          fe_cmd_v_li = fe_cmd_ready_lo;
+          fe_cmd_v_li = is_run || (is_wait && irq_waiting_i);
         end
       else if (isd_status_cast_i.v & npc_mismatch_v)
         begin
@@ -241,7 +241,7 @@ module bp_be_director
                                                              : e_not_a_branch;
           fe_cmd_li.operands.pc_redirect_operands          = fe_cmd_pc_redirect_operands;
 
-          fe_cmd_v_li = fe_cmd_ready_lo;
+          fe_cmd_v_li = is_run;
         end
       // Send an attaboy if there's a correct prediction
       else if (isd_status_cast_i.v & ~npc_mismatch_v & last_instr_was_branch)
@@ -251,7 +251,7 @@ module bp_be_director
           fe_cmd_li.operands.attaboy.taken               = last_instr_was_btaken;
           fe_cmd_li.operands.attaboy.branch_metadata_fwd = isd_status_cast_i.branch_metadata_fwd;
 
-          fe_cmd_v_li = fe_cmd_ready_lo;
+          fe_cmd_v_li = is_run;
         end
     end
 
@@ -263,7 +263,6 @@ module bp_be_director
 
      ,.fe_cmd_i(fe_cmd_li)
      ,.fe_cmd_v_i(fe_cmd_v_li)
-     ,.fe_cmd_ready_o(fe_cmd_ready_lo)
 
      ,.fe_cmd_o(fe_cmd_o)
      ,.fe_cmd_v_o(fe_cmd_v_o)
