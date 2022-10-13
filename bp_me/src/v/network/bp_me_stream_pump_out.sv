@@ -98,9 +98,9 @@ module bp_me_stream_pump_out
     (.clk_i(clk_i)
      ,.reset_i(reset_i)
 
+     ,.en_i(cnt_up)
      ,.size_i(size_li)
      ,.val_i(first_cnt)
-     ,.en_i(cnt_up)
 
      ,.wrap_o(fsm_cnt_o)
      ,.first_o(fsm_new_o)
@@ -118,6 +118,7 @@ module bp_me_stream_pump_out
     begin
       msg_header_cast_o = fsm_header_cast_i;
       msg_data_o = fsm_data_i;
+      msg_last_o = fsm_last_o;
 
       if (~fsm_stream & msg_stream)
         begin
@@ -144,11 +145,9 @@ module bp_me_stream_pump_out
           // 1:1
           msg_v_o = fsm_v_i;
           fsm_ready_and_o = msg_ready_and_i;
-          cnt_up  = fsm_ready_and_o & fsm_v_i;
+          cnt_up = fsm_ready_and_o & fsm_v_i;
           msg_header_cast_o.addr = wrap_addr;
         end
-
-      msg_last_o = fsm_last_o;
     end
 
   // parameter checks

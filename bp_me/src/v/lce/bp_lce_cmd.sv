@@ -220,6 +220,7 @@ module bp_lce_cmd
      ,.msg_last_o(lce_fill_last_o)
 
      ,.fsm_header_i(fsm_fill_header_lo)
+     ,.fsm_addr_o()
      ,.fsm_data_i(fsm_fill_data_lo)
      ,.fsm_v_i(fsm_fill_v_lo)
      ,.fsm_ready_and_o(fsm_fill_ready_and_li)
@@ -255,6 +256,7 @@ module bp_lce_cmd
      ,.msg_last_o(lce_resp_last_o)
 
      ,.fsm_header_i(fsm_resp_header_lo)
+     ,.fsm_addr_o()
      ,.fsm_data_i(fsm_resp_data_lo)
      ,.fsm_v_i(fsm_resp_v_lo)
      ,.fsm_ready_and_o(fsm_resp_ready_and_li)

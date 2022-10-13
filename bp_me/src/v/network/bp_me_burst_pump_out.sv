@@ -4,7 +4,7 @@
  *   bp_me_burst_pump_out.sv
  *
  * Description:
- *   Generates a BedRock Stream protocol output message from an FSM that provides
+ *   Generates a BedRock Burst protocol output message from an FSM that provides
  *   a base header and, if required, data words. The base header is held constant
  *   by the FSM throughout the transaction.
  *
@@ -64,8 +64,9 @@ module bp_me_burst_pump_out
    // FSM producer side
    // FSM must hold fsm_header_i constant throughout the transaction
    // (i.e., through cycle fsm_last_o is raised)
-   , input        [xce_header_width_lp-1:0]         fsm_header_i
-   , input        [stream_data_width_p-1:0]         fsm_data_i
+   , input [xce_header_width_lp-1:0]                fsm_header_i
+   , output logic [paddr_width_p-1:0]               fsm_addr_o
+   , input [stream_data_width_p-1:0]                fsm_data_i
    , input                                          fsm_v_i
    , output logic                                   fsm_ready_and_o
 
@@ -82,45 +83,49 @@ module bp_me_burst_pump_out
   `bp_cast_i(bp_bedrock_xce_header_s, fsm_header);
   `bp_cast_o(bp_bedrock_xce_header_s, msg_header);
   
-  enum logic [1:0] {e_ready, e_burst, e_aggregate} state_n, state_r;
-  wire is_ready     = (state_r == e_ready);
-  wire is_burst     = (state_r == e_burst);
-  wire is_aggregate = (state_r == e_aggregate);
   wire fsm_stream = fsm_stream_mask_p[fsm_header_cast_i.msg_type];
+  wire msg_stream = msg_stream_mask_p[fsm_header_cast_i.msg_type];
 
   wire [stream_cnt_width_lp-1:0] stream_size = fsm_stream
     ? `BSG_MAX((1'b1 << fsm_header_cast_i.size) / stream_bytes_lp, 1'b1) - 1'b1
     : '0;
 
-  logic first_lo, last_lo;
-  bp_me_burst_wraparound
-   #(.max_val_p(stream_words_lp-1)
-     ,.addr_width_p(paddr_width_p)
-     ,.offset_width_p(stream_cnt_width_lp)
-     )
-   wraparound
+  logic cnt_up;
+  wire [stream_cnt_width_lp-1:0] size_li = fsm_stream ? stream_size : '0;
+  wire [stream_cnt_width_lp-1:0] first_cnt = fsm_header_cast_i.addr[stream_offset_width_lp+:stream_cnt_width_lp];
+  bp_me_burst_pump_control
+   #(.max_val_p(stream_words_lp-1))
+   pump_control
     (.clk_i(clk_i)
      ,.reset_i(reset_i)
  
-     ,.en_i(fsm_ready_and_o & fsm_v_i)
-     ,.size_i(stream_size)
-     ,.base_i(fsm_header_cast_i.addr)
- 
-     ,.addr_o()
-     ,.cnt_o(fsm_cnt_o)
+     ,.en_i(cnt_up)
+     ,.size_i(size_li)
+     ,.val_i(first_cnt)
+
+     ,.wrap_o(fsm_cnt_o)
      ,.first_o(fsm_new_o)
      ,.last_o(fsm_last_o)
      );
 
-  logic header_v_li, header_ready_lo;
+  wire [paddr_width_p-1:0] wrap_addr =
+    {fsm_header_cast_i.addr[paddr_width_p-1:block_offset_width_lp]
+     ,{stream_words_lp>1{fsm_cnt_o}}
+     ,fsm_header_cast_i.addr[0+:stream_offset_width_lp]
+     };
+  assign fsm_addr_o = wrap_addr;
+
+  // This fifo can be bypassed for area/performance
+  // But the control logic is simplified by only enqueuing once
+  logic header_ready_lo;
+  wire fsm_has_data_li = msg_stream;
   bsg_two_fifo
-   #(.width_p(1+$bits(bp_bedrock_xce_header_s)))
+   #(.width_p($bits(bp_bedrock_xce_header_s)+1), .ready_THEN_valid_p(1))
    header_fifo
     (.clk_i(clk_i)
      ,.reset_i(reset_i)
-
-     ,.data_i({fsm_stream, fsm_header_cast_i})
-     ,.v_i(header_v_li)
+     ,.data_i({fsm_has_data_li, fsm_header_cast_i})
+     ,.v_i(fsm_ready_and_o & fsm_v_i & fsm_new_o)
      ,.ready_o(header_ready_lo)
 
      ,.data_o({msg_has_data_o, msg_header_cast_o})
@@ -128,58 +133,38 @@ module bp_me_burst_pump_out
      ,.yumi_i(msg_header_ready_and_i & msg_header_v_o)
      );
 
-  logic data_v_li, data_ready_lo;
-  bsg_two_fifo
-   #(.width_p(1+stream_data_width_p))
-   data_fifo
-    (.clk_i(clk_i)
-     ,.reset_i(reset_i)
-
-     ,.data_i({fsm_last_o, fsm_data_i})
-     ,.v_i(data_v_li)
-     ,.ready_o(data_ready_lo)
-
-     ,.data_o({msg_last_o, msg_data_o})
-     ,.v_o(msg_data_v_o)
-     ,.yumi_i(msg_data_ready_and_i & msg_data_v_o)
-     );
-
+  // TODO: The throughput could easily be improved here
+  // TODO: data_ready only if has_data
   always_comb
     begin
-      state_n = state_r;
+      msg_data_o = fsm_data_i;
+      msg_last_o = fsm_last_o;
 
-      fsm_ready_and_o = '0;
-      header_v_li = '0;
-      data_v_li = '0;
-
-      case (state_r)
-        e_ready:
-          begin
-            // Need data to be ready to maintain helpfulness
-            // Unlikely to cause performance issues
-            fsm_ready_and_o = header_ready_lo & data_ready_lo;
-            header_v_li = fsm_ready_and_o & fsm_v_i;
-            data_v_li = fsm_ready_and_o & fsm_v_i & fsm_stream;
-
-            state_n = (data_v_li & ~fsm_last_o) ? e_burst : e_ready;
-          end
-        e_burst:
-          begin
-            fsm_ready_and_o = data_ready_lo;
-            data_v_li = fsm_ready_and_o & fsm_v_i;
-
-            state_n = (data_v_li & fsm_last_o) ? e_ready : e_burst;
-          end
-        default : begin end
-      endcase
+      if (~fsm_stream & msg_stream)
+        begin
+          // 1:N
+          // send N msg beats, and ack single FSM beat on last msg beat
+          msg_data_v_o = fsm_v_i & fsm_has_data_li;
+          fsm_ready_and_o = header_ready_lo & fsm_last_o & msg_data_ready_and_i;
+          cnt_up = fsm_ready_and_o & fsm_v_i;
+        end
+      else if (fsm_stream & ~msg_stream)
+        begin
+          // N:1
+          // only send msg on last FSM beat
+          msg_data_v_o = fsm_v_i & fsm_has_data_li & fsm_last_o;
+          // ack all but last FSM beat silently, then ack last FSM beat when msg beat sends
+          fsm_ready_and_o = (fsm_v_i & ~fsm_last_o) | (header_ready_lo & msg_data_ready_and_i);
+          cnt_up = fsm_ready_and_o & fsm_v_i;
+        end
+      else
+        begin
+          // 1:1
+          msg_data_v_o = fsm_v_i & fsm_has_data_li;
+          fsm_ready_and_o = header_ready_lo & msg_data_ready_and_i;
+          cnt_up = fsm_ready_and_o & fsm_v_i;
+        end
     end
-
-  // synopsys sync_set_reset "reset_i"
-  always_ff @(posedge clk_i)
-    if (reset_i)
-      state_r <= e_ready;
-    else
-      state_r <= state_n;
 
 endmodule
 

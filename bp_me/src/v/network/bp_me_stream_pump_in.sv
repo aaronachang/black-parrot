@@ -128,9 +128,9 @@ module bp_me_stream_pump_in
     (.clk_i(clk_i)
      ,.reset_i(reset_i)
 
+     ,.en_i(cnt_up)
      ,.size_i(size_li)
      ,.val_i(first_cnt)
-     ,.en_i(cnt_up)
 
      ,.wrap_o(fsm_cnt_o)
      ,.first_o(fsm_new_o)

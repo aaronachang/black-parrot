@@ -4,8 +4,8 @@
  *   bp_me_burst_pump_in.sv
  *
  * Description:
- *   Provides an FSM with control signals for an inbound BedRock Stream interface.
- *   This module buffers the inbound BedRock Stream channel and exposes it to the FSM.
+ *   Provides an FSM with control signals for an inbound BedRock Burst interface.
+ *   This module buffers the inbound BedRock Burst channel and exposes it to the FSM.
  *
  */
 
@@ -30,7 +30,7 @@ module bp_me_burst_pump_in
    // 1. Message types that are set as part of fsm_stream_mask_p but not set in
    //    msg_stream_mask_p result in a 1:N conversion from msg->FSM ports.
    //    For example, in BlackParrot a read command for 64B to the
-   //    cache arriving on the BedRock Stream input can be decomposed into a stream of
+   //    cache arriving on the BedRock Bust input can be decomposed into a stream of
    //    8B reads on the FSM output port.
    // 2. Message types set in both will have N:N beats. Every beat on the input
    //    will produce a beat on the output. This is commonly used for all messages
@@ -54,7 +54,7 @@ module bp_me_burst_pump_in
   (input                                            clk_i
    , input                                          reset_i
 
-   // Input BedRock Stream
+   // Input BedRock Burst
    , input [xce_header_width_lp-1:0]                msg_header_i
    , input                                          msg_header_v_i
    , output logic                                   msg_header_ready_and_o
@@ -127,90 +127,69 @@ module bp_me_burst_pump_in
   wire nz_stream = stream_size > '0;
   wire fsm_stream = fsm_stream_mask_p[msg_header_li.msg_type];
   wire msg_stream = msg_stream_mask_p[msg_header_li.msg_type];
-  wire do_burst = fsm_stream &  msg_stream & nz_stream;
-  wire do_spray = fsm_stream & ~msg_stream & nz_stream;
 
-  logic first_lo, last_lo;
-  bp_me_burst_wraparound
-   #(.max_val_p(stream_words_lp-1)
-     ,.addr_width_p(paddr_width_p)
-     ,.offset_width_p(stream_cnt_width_lp)
-     )
-   wraparound
+  logic cnt_up;
+  wire [stream_cnt_width_lp-1:0] size_li = fsm_stream ? stream_size : '0;
+  wire [stream_cnt_width_lp-1:0] first_cnt = msg_header_li.addr[stream_offset_width_lp+:stream_cnt_width_lp];
+  bp_me_burst_pump_control
+   #(.max_val_p(stream_words_lp-1))
+   pump_control
     (.clk_i(clk_i)
      ,.reset_i(reset_i)
 
-     ,.en_i(fsm_yumi_i)
-     ,.size_i(stream_size)
-     ,.base_i(msg_header_li.addr)
+     ,.en_i(cnt_up)
+     ,.size_i(size_li)
+     ,.val_i(first_cnt)
 
-     ,.addr_o(fsm_addr_o)
-     ,.cnt_o(fsm_cnt_o)
-     ,.first_o(first_lo)
-     ,.last_o(last_lo)
+     ,.wrap_o(fsm_cnt_o)
+     ,.first_o(fsm_new_o)
+     ,.last_o(fsm_last_o)
      );
 
-  wire write_v_li = msg_header_v_li & msg_has_data_li & msg_data_v_li;
-  wire read_v_li = msg_header_v_li & ~msg_has_data_li;
+  wire [paddr_width_p-1:0] wrap_addr =
+    {msg_header_li.addr[paddr_width_p-1:block_offset_width_lp]
+     ,{stream_words_lp>1{fsm_cnt_o}}
+     ,msg_header_li.addr[0+:stream_offset_width_lp]
+     };
 
   always_comb
     begin
-		  state_n = state_r;
+      fsm_header_cast_o = msg_header_li;
+      // keep the address to be the critical word address
+      fsm_header_cast_o.addr[0+:block_offset_width_lp] = msg_header_li.addr;
+      fsm_data_o = msg_data_li;
 
-			fsm_header_cast_o = msg_header_li;
-		  fsm_data_o = msg_data_li;
-
-			fsm_v_o = '0;
-			fsm_new_o = '0;
-			fsm_last_o = '0;
-
-			msg_header_yumi_lo = '0;
-			msg_data_yumi_lo = '0;
-
-      case (state_r)
-        e_ready:
-				  begin
-            fsm_v_o            = read_v_li | write_v_li;
-            fsm_new_o          = fsm_v_o;
-            fsm_last_o         = (read_v_li & ~do_spray) || (write_v_li & ~do_burst);
-            msg_header_yumi_lo = fsm_yumi_i & fsm_new_o & fsm_last_o;
-            msg_data_yumi_lo   = fsm_yumi_i & msg_has_data_li;
-
-					  state_n = fsm_yumi_i
-                      ? do_burst
-                        ? e_burst
-                        : do_spray
-                          ? e_spray 
-                          : e_ready
-                      : e_ready;
-					end
-        e_burst:
-				  begin
-            fsm_v_o            = msg_data_v_li;
-            fsm_last_o         = last_lo;
-            msg_data_yumi_lo   = fsm_yumi_i;
-            msg_header_yumi_lo = msg_data_yumi_lo & msg_last_li;
-
-					  state_n = msg_header_yumi_lo ? e_ready : e_burst;
-					end
-        e_spray:
-          begin
-            fsm_v_o            = msg_header_v_li;
-            fsm_last_o         = last_lo;
-            msg_header_yumi_lo = fsm_yumi_i & last_lo;
-
-            state_n = msg_header_yumi_lo ? e_ready : e_spray;
-          end
-        default : begin end
-      endcase
+      if (~msg_stream & fsm_stream)
+        begin
+          // 1:N
+          // convert one msg message into stream of N FSM messages
+          fsm_v_o = msg_header_v_li & (msg_data_v_li | ~msg_has_data_li);
+          msg_header_yumi_lo = fsm_yumi_i & fsm_last_o & msg_header_v_li;
+          msg_data_yumi_lo = fsm_yumi_i & fsm_last_o & msg_data_v_li;
+          cnt_up = fsm_yumi_i;
+          fsm_addr_o = wrap_addr;
+        end
+      else if (msg_stream & ~fsm_stream)
+        begin
+          // N:1
+          // consume all but last msg input beat silently, then FSM consumes last beat
+          fsm_v_o = msg_header_v_li & ((msg_data_v_li & msg_last_li) | ~msg_has_data_li);
+          msg_header_yumi_lo = fsm_yumi_i & fsm_last_o;
+          msg_data_yumi_lo = msg_data_v_i & (~fsm_last_o | fsm_yumi_i);
+          cnt_up = msg_data_yumi_lo;
+          // Hold address constant at critical address
+          fsm_addr_o = msg_header_li.addr;
+        end
+      else
+        begin
+          // 1:1
+          fsm_v_o = msg_header_v_li & (msg_data_v_li | ~msg_has_data_li);
+          msg_header_yumi_lo = msg_header_v_li & fsm_yumi_i & fsm_last_o;
+          msg_data_yumi_lo = msg_data_v_li & fsm_yumi_i;
+          cnt_up = fsm_yumi_i;
+          fsm_addr_o = wrap_addr;
+        end
     end
-
-  // synopsys sync_set_reset "reset_i"
-  always_ff @(posedge clk_i)
-    if (reset_i)
-      state_r <= e_ready;
-    else
-      state_r <= state_n;
 
   // parameter checks
   if (block_width_p % stream_data_width_p != 0)

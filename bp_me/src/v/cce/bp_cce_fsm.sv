@@ -180,6 +180,7 @@ module bp_cce_fsm
      ,.msg_last_o(lce_cmd_last_o)
 
      ,.fsm_header_i(fsm_cmd_header_lo)
+     ,.fsm_addr_o()
      ,.fsm_data_i(fsm_cmd_data_lo)
      ,.fsm_v_i(fsm_cmd_v_lo)
      ,.fsm_ready_and_o(fsm_cmd_ready_and_li)
@@ -586,8 +587,8 @@ module bp_cce_fsm
      ,.count_o(mem_credit_count_lo)
      );
 
-  wire mem_credits_empty = (mem_credit_count_lo == mem_noc_max_credits_p);
-  wire mem_credits_full = (mem_credit_count_lo == 0);
+  wire mem_credits_empty = (mem_credit_count_lo == 0);
+  wire mem_credits_full  = (mem_credit_count_lo == mem_noc_max_credits_p);
 
   // Speculative memory access management
   bp_cce_spec_s spec_bits_li, spec_bits_lo;
@@ -1055,7 +1056,7 @@ module bp_cce_fsm
           // first beat of memory command must include data
           // handshake is r&v on both LCE request data and memory command stream, and
           // valid->yumi on LCE request header
-          fsm_fwd_v_lo = fsm_req_v_li & ~mem_credits_empty;
+          fsm_fwd_v_lo = fsm_req_v_li & ~mem_credits_full;
           fsm_req_yumi_lo = fsm_fwd_ready_and_li & fsm_fwd_v_lo & fsm_fwd_last_lo;
 
           // form message
@@ -1070,7 +1071,7 @@ module bp_cce_fsm
         // uncached load
         else if (fsm_req_v_li & (fsm_req_header_li.msg_type.req == e_bedrock_req_uc_rd)) begin
           // uncached load has no data
-          fsm_fwd_v_lo = fsm_req_v_li & ~mem_credits_empty;
+          fsm_fwd_v_lo = fsm_req_v_li & ~mem_credits_full;
           fsm_req_yumi_lo = fsm_fwd_ready_and_li & fsm_fwd_v_lo & fsm_fwd_last_lo;
 
           fsm_fwd_header_lo.addr = fsm_req_header_li.addr;
@@ -1088,13 +1089,13 @@ module bp_cce_fsm
       e_send_sync: begin
         // register that normal mode is active (can still be doing sync) and all outstanding
         // uncached accesses are complete
-        cce_normal_mode_n = (~cce_normal_mode_r & mem_credits_full)
+        cce_normal_mode_n = (~cce_normal_mode_r & mem_credits_empty)
                             ? 1'b1
                             : cce_normal_mode_r;
 
         // after first entering e_send_sync from e_uncached_only, wait for all oustanding uncached
         // accesses to complete before sending first sync commnad
-        if (mem_credits_full & ~lce_cmd_busy) begin
+        if (mem_credits_empty & ~lce_cmd_busy) begin
           fsm_cmd_v_lo = 1'b1;
 
           fsm_cmd_header_lo.msg_type.cmd = e_bedrock_cmd_sync;
@@ -1187,7 +1188,7 @@ module bp_cce_fsm
           // first beat of memory command must include data
           // handshake is r&v on both LCE request data and memory command stream, and
           // valid->yumi on LCE request header
-          fsm_fwd_v_lo = fsm_req_v_li & ~mem_credits_empty;
+          fsm_fwd_v_lo = fsm_req_v_li & ~mem_credits_full;
           fsm_req_yumi_lo = fsm_fwd_ready_and_li & fsm_fwd_v_lo;
 
           // form message
@@ -1209,7 +1210,7 @@ module bp_cce_fsm
         // uncached load
         else begin
           // uncached load has no data
-          fsm_fwd_v_lo = fsm_req_v_li & ~mem_credits_empty;
+          fsm_fwd_v_lo = fsm_req_v_li & ~mem_credits_full;
           fsm_req_yumi_lo = fsm_fwd_ready_and_li & fsm_fwd_v_lo & fsm_fwd_last_lo;
 
           fsm_fwd_header_lo.addr = mshr_r.paddr;
@@ -1266,7 +1267,7 @@ module bp_cce_fsm
         // writing the pending bit
         if (~pending_busy) begin
           // handshake is r&v
-          fsm_fwd_v_lo = ~mem_credits_empty;
+          fsm_fwd_v_lo = ~mem_credits_full;
           fsm_fwd_header_lo.msg_type.fwd = e_bedrock_mem_rd;
           fsm_fwd_header_lo.addr = mshr_r.paddr;
           fsm_fwd_header_lo.size = mshr_r.msg_size;
@@ -1478,7 +1479,7 @@ module bp_cce_fsm
             end
 
           end
-          else if ((fsm_resp_header_li.msg_type.resp == e_bedrock_resp_wb) & ~pending_busy & ~mem_credits_empty) begin
+          else if ((fsm_resp_header_li.msg_type.resp == e_bedrock_resp_wb) & ~pending_busy & ~mem_credits_full) begin
             // Mem Data Cmd needs to write pending bit, so only send if Mem Data Resp / LCE Data Cmd is
             // not writing the pending bit. Mem command also requires a credit, so only proceed if
             // there is at least one credit availabe.
@@ -1650,7 +1651,7 @@ module bp_cce_fsm
       // amo/uc wait for replacement writeback or invalidation ack if sent
       e_uc_coherent_resp: begin
         if (fsm_resp_v_li) begin
-          if (fsm_resp_header_li.msg_type.resp == e_bedrock_resp_wb & ~pending_busy & ~mem_credits_empty) begin
+          if (fsm_resp_header_li.msg_type.resp == e_bedrock_resp_wb & ~pending_busy & ~mem_credits_full) begin
             if (~pending_busy) begin
               // Mem Data Cmd needs to write pending bit, so only send if Mem Data Resp / LCE Data Cmd is
               // not writing the pending bit
@@ -1690,7 +1691,7 @@ module bp_cce_fsm
       // amo/uc after inv_ack/wb_response, issue op to memory
       // writes pending bit
       e_uc_coherent_mem_fwd: begin
-        if (~pending_busy & ~mem_credits_empty) begin
+        if (~pending_busy & ~mem_credits_full) begin
           // r&v on mem cmd header
           // v->y on lce req header
           // r&v on lce req data
@@ -1801,7 +1802,7 @@ module bp_cce_fsm
             state_n = e_resolve_speculation;
 
           end
-          else if ((fsm_resp_header_li.msg_type.resp == e_bedrock_resp_wb) & ~pending_busy & ~mem_credits_empty) begin
+          else if ((fsm_resp_header_li.msg_type.resp == e_bedrock_resp_wb) & ~pending_busy & ~mem_credits_full) begin
             // Mem Data Cmd needs to write pending bit, so only send if Mem Data Resp / LCE Data Cmd is
             // not writing the pending bit. Mem command also needs a credit, only process if one is
             // available.

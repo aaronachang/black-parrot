@@ -1,30 +1,30 @@
 /**
  *
  * Name:
- *   bp_me_stream_pump_control.sv
+ *   bp_me_burst_pump_control.sv
  *
  * Description:
- *   Generates the stream word/cnt portion of a BedRock Stream protocol message address given
- *   an initial stream word and transaction size in stream words (both zero-based).
+ *   Generates the burst word/cnt portion of a BedRock Stream protocol message address given
+ *   an initial burst word and transaction size in burst words (both zero-based).
  *
- *   max_val_p is equal to (block width / stream width) - 1 (i.e., zero-based).
+ *   max_val_p is equal to (block width / burst width) - 1 (i.e., zero-based).
  *   max_val_p+1 must be a power of two for the wrap-around counting to work properly
- *   E.g., if a block is divided into 8 stream words, max_val_p = 7.
+ *   E.g., if a block is divided into 8 burst words, max_val_p = 7.
  *
- *   size_i is the zero-based transaction size (e.g., a transaction of 4 stream words has size_i = 3)
+ *   size_i is the zero-based transaction size (e.g., a transaction of 4 burst words has size_i = 3)
  *   - size_i+1 should be a power of two
- *   val_i is the zero-based initial stream word in [0, max_val_p] of the transaction
+ *   val_i is the zero-based initial burst word in [0, max_val_p] of the transaction
  *   Both size_i and val_i must be held constant throughout the transaction.
  *
  *   wrap_o is a count that wraps around at the end of the naturally aligned sub-block with
- *      size size_i targeted by the transaction. wrap_o is typically used directed in the stream
+ *      size size_i targeted by the transaction. wrap_o is typically used directed in the burst
  *      message address.
  *
  */
 
 `include "bsg_defines.v"
 
-module bp_me_stream_pump_control
+module bp_me_burst_pump_control
  #(parameter `BSG_INV_PARAM(max_val_p)
    , localparam width_lp = `BSG_WIDTH(max_val_p)
    )
@@ -38,7 +38,7 @@ module bp_me_stream_pump_control
    // Initial value for a new transaction
    , input [`BSG_SAFE_MINUS(width_lp,1):0]        val_i
 
-   // wrap-around count, used to construct proper stream beat address
+   // wrap-around count, used to construct proper burst beat address
    // wraps within sub-block aligned portion of block targeted by request
    , output logic [`BSG_SAFE_MINUS(width_lp,1):0] wrap_o
    , output logic                                 first_o
@@ -57,9 +57,9 @@ module bp_me_stream_pump_control
     end
   else
     begin : nz
-      enum logic {e_ready, e_stream} state_n, state_r;
+      enum logic {e_ready, e_burst} state_n, state_r;
       wire is_ready = (state_r == e_ready);
-      wire is_stream = (state_r == e_stream);
+      wire is_burst = (state_r == e_burst);
       assign first_o = is_ready;
     
       logic [width_lp-1:0] cnt_r;
@@ -88,35 +88,35 @@ module bp_me_stream_pump_control
          );
       assign last_o = is_ready ? (size_i == '0) : (last_cnt_r == cnt_r);
     
-      // Dynamically generate sub-block wrapped stream count
+      // Dynamically generate sub-block wrapped burst count
       // The count is wrapped within the size_i aligned portion of the block containing val_i
       //
       // A canonical block address can be viewed as:
       // __________________________________________________________
       // |                |          block offset                  |  block address
       // |  upper address |________________________________________|
-      // |                |     stream count   |  stream offset    |  stream word address
+      // |                |     burst count   |  burst offset    |  burst word address
       // |________________|____________________|___________________|
-      // where stream offset is a byte offset of the current stream word and stream count is
-      // the current stream word portion of the block, having width = stream data channel width
+      // where burst offset is a byte offset of the current burst word and burst count is
+      // the current burst word portion of the block, having width = burst data channel width
       //
-      // stream count is further divided into:
+      // burst count is further divided into:
       // __________________________________________________
       // |    sub-block number     |    sub-block count    |
       // |_________________________|_______________________|
       //
       // To produce wrap_o, which is the sub-block aligned and wrapped count, the sub-block number
       // field is held constant while sub-block count comes from the counter. The number of bits
-      // derived from the counter versus the initial stream word input (val_i) is determined by
+      // derived from the counter versus the initial burst word input (val_i) is determined by
       // the transaction size (size_i) input.
       //
-      // For example, consider a system with max_val_p = 7 (8 stream words per block), where a block
-      // comprises stream words [7, 6, 5, 4, 3, 2, 1, 0], listed most to least significant.
-      // An exampe system like this could have 512 bit blocks with a stream data width of 64 bits.
-      // 3 bits = log2(512/64) are required for the stream count. The transaction size (size_i)
+      // For example, consider a system with max_val_p = 7 (8 burst words per block), where a block
+      // comprises burst words [7, 6, 5, 4, 3, 2, 1, 0], listed most to least significant.
+      // An exampe system like this could have 512 bit blocks with a burst data width of 64 bits.
+      // 3 bits = log2(512/64) are required for the burst count. The transaction size (size_i)
       // determines how many bits are used from val_i and cnt_r to produce wrap_o.
     
-      // E.g., max_val_p = 7 for a system with 512-bit blocks and 64-bit stream data width
+      // E.g., max_val_p = 7 for a system with 512-bit blocks and 64-bit burst data width
       // A 512-bit transaction sets size_i = 7 and a 256-bit transactions sets size_i = 3
       // 512-bit, size_i = 7, val_i = 2: wrap_o = 2, 3, 4, 5, 6, 7, 0, 1
       // 256-bit, size_i = 3, val_i = 2: wrap_o = 2, 3, 0, 1
@@ -133,7 +133,7 @@ module bp_me_stream_pump_control
           assign wrap_sel_li[i] = size_i >= 2**i;
         end
     
-      // sub-block wrapped and aligned count (stream word)
+      // sub-block wrapped and aligned count (burst word)
       logic [width_lp-1:0] wrap_lo;
       bsg_mux_bitwise
        #(.width_p(width_lp))
@@ -148,9 +148,9 @@ module bp_me_stream_pump_control
     
       always_comb
         case (state_r)
-          e_stream: state_n = (en_i &  last_o) ? e_ready : e_stream;
+          e_burst: state_n = (en_i &  last_o) ? e_ready : e_burst;
           // e_ready:
-          default : state_n = (en_i & ~last_o) ? e_stream : e_ready;
+          default : state_n = (en_i & ~last_o) ? e_burst : e_ready;
         endcase
     
       //synopsys sync_set_reset "reset_i"
@@ -163,4 +163,4 @@ module bp_me_stream_pump_control
 
 endmodule
 
-`BSG_ABSTRACT_MODULE(bp_me_stream_pump_control)
+`BSG_ABSTRACT_MODULE(bp_me_burst_pump_control)
