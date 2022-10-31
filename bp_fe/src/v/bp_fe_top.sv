@@ -99,8 +99,8 @@ module bp_fe_top
   logic redirect_v_li;
   logic [vaddr_width_p-1:0] redirect_pc_li;
   logic redirect_br_v_li, redirect_br_taken_li, redirect_br_ntaken_li, redirect_br_nonbr_li;
-  logic redirect_restore_insn_lower_half_v_li;
-  logic [instr_half_width_gp-1:0] redirect_restore_insn_lower_half_li;
+  logic redirect_resume_v_li;
+  logic [instr_half_width_gp-1:0] redirect_resume_instr_li;
   bp_fe_branch_metadata_fwd_s redirect_br_metadata_fwd_li;
   bp_fe_branch_metadata_fwd_s attaboy_br_metadata_fwd_li;
   logic attaboy_v_li, attaboy_yumi_lo, attaboy_taken_li, attaboy_ntaken_li;
@@ -108,12 +108,14 @@ module bp_fe_top
   logic [instr_width_gp-1:0] fetch_instr_li, fetch_instr_lo;
   logic [vaddr_width_p-1:0] fetch_pc_lo;
   logic fetch_v_li, fetch_instr_v_li, fetch_exception_v_li;
-  logic fetch_instr_v_lo, fetch_is_second_half_lo, fetch_instr_yumi_li;
+  logic fetch_instr_v_lo, fetch_partial_lo, fetch_instr_yumi_li;
   bp_fe_branch_metadata_fwd_s fetch_br_metadata_fwd_lo;
   logic [vaddr_width_p-1:0] next_pc_lo;
   logic next_pc_v_li;
   logic ovr_lo, if1_we, if2_we;
   logic pc_gen_init_done_lo;
+  logic [vaddr_width_p-1:0] if2_pc;
+  logic fetch_taken_branch_site_lo;
   bp_fe_pc_gen
    #(.bp_params_p(bp_params_p))
    pc_gen
@@ -129,8 +131,8 @@ module bp_fe_top
      ,.redirect_br_taken_i(redirect_br_taken_li)
      ,.redirect_br_ntaken_i(redirect_br_ntaken_li)
      ,.redirect_br_nonbr_i(redirect_br_nonbr_li)
-     ,.redirect_resume_v_i(redirect_restore_insn_lower_half_v_li)
-     ,.redirect_resume_instr_i(redirect_restore_insn_lower_half_li)
+     ,.redirect_resume_v_i(redirect_resume_v_li)
+     ,.redirect_resume_instr_i(redirect_resume_instr_li)
 
      ,.next_pc_o(next_pc_lo)
      ,.if1_we_i(if1_we)
@@ -138,14 +140,14 @@ module bp_fe_top
      ,.ovr_o(ovr_lo)
      ,.if2_we_i(if2_we)
 
-     ,.fetch_i(fetch_instr_li)
-     ,.fetch_v_i(icache_data_v_lo & icache_yumi_li)
-     ,.fetch_instr_o(fetch_instr_lo)
-     ,.fetch_instr_v_o(fetch_instr_v_lo)
-     ,.fetch_instr_yumi_i(fetch_instr_v_li)
+     ,.if2_pc_o(if2_pc)
+
+     ,.fetch_instr_i(fetch_instr_li)
+     ,.fetch_instr_v_i(icache_data_v_lo & icache_yumi_li)
      ,.fetch_br_metadata_fwd_o(fetch_br_metadata_fwd_lo)
-     ,.fetch_pc_o(fetch_pc_lo)
-     ,.fetch_is_second_half_o(fetch_is_second_half_lo)
+     ,.fetch_partial_i(fetch_partial_lo)
+     ,.fetch_taken_branch_site_o(fetch_taken_branch_site_lo)
+     ,.fetch_pc_i(fetch_pc_lo)
 
      ,.attaboy_pc_i(attaboy_pc_li)
      ,.attaboy_br_metadata_fwd_i(attaboy_br_metadata_fwd_li)
@@ -154,10 +156,6 @@ module bp_fe_top
      ,.attaboy_v_i(attaboy_v_li)
      ,.attaboy_yumi_o(attaboy_yumi_lo)
      );
-
-  // TODO: Fix
-  //   ,.redirect_resume_v_i(redirect_restore_insn_lower_half_v_li)
-  // ,.redirect_resume_instr_i(redirect_restore_insn_lower_half_li)
 
   logic instr_access_fault_v, instr_page_fault_v;
   logic ptag_v_li, ptag_uncached_li, ptag_nonidem_li, ptag_dram_li, ptag_miss_li;
@@ -318,8 +316,8 @@ module bp_fe_top
      ,.redirect_br_ntaken_o(redirect_br_ntaken_li)
      ,.redirect_br_nonbr_o(redirect_br_nonbr_li)
      ,.redirect_br_metadata_fwd_o(redirect_br_metadata_fwd_li)
-     ,.redirect_resume_v_o(redirect_restore_insn_lower_half_v_li)
-     ,.redirect_resume_instr_o(redirect_restore_insn_lower_half_li)
+     ,.redirect_resume_v_o(redirect_resume_v_li)
+     ,.redirect_resume_instr_o(redirect_resume_instr_li)
 
      ,.attaboy_pc_o(attaboy_pc_li)
      ,.attaboy_taken_o(attaboy_taken_li)
@@ -356,6 +354,35 @@ module bp_fe_top
      ,.fetch_instr_i(fetch_instr_lo)
      );
 
+
+  wire pc_if2_misaligned = !`bp_addr_is_aligned(if2_pc, rv64_instr_width_bytes_gp);
+
+  wire fetch_store_v = (!fetch_partial_lo && pc_if2_misaligned)
+                      || ( fetch_partial_lo && !fetch_taken_branch_site_lo);
+
+   bp_fe_realigner
+    #(.bp_params_p(bp_params_p))
+    realigner
+     (.clk_i(clk_i)
+      ,.reset_i(reset_i)
+
+      ,.fetch_v_i(icache_data_v_lo & icache_yumi_lo)
+      ,.fetch_store_v_i(fetch_store_v)
+      ,.fetch_pc_i(if2_pc)
+      ,.fetch_data_i(icache_data_lo)
+
+      ,.redirect_v_i(redirect_v_li)
+      ,.redirect_resume_i(redirect_resume_v_li)
+      ,.redirect_partial_i(redirect_resume_instr_li)
+      ,.redirect_vaddr_i(redirect_pc_li)
+
+      ,.fetch_instr_pc_o(fetch_pc_lo)
+      ,.fetch_instr_o(fetch_instr_lo)
+      ,.fetch_instr_v_o(fetch_instr_v_lo)
+      ,.fetch_partial_o(fetch_partial_lo)
+      ,.fetch_instr_yumi_i(fetch_instr_v_li)
+      );
+
   always_comb
     begin
       fe_queue_cast_o = '0;
@@ -373,7 +400,7 @@ module bp_fe_top
                                            : e_instr_fetch;
       fe_queue_cast_o.instr = fetch_instr_lo;
       fe_queue_cast_o.branch_metadata_fwd = fetch_br_metadata_fwd_lo;
-      fe_queue_cast_o.partial_v = compressed_support_p & fetch_is_second_half_lo & fe_exception_v;
+      fe_queue_cast_o.partial_v = compressed_support_p & fetch_partial_lo & fe_exception_v;
     end
 
 endmodule

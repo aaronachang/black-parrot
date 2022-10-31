@@ -32,7 +32,7 @@ module bp_fe_realigner
    , output [vaddr_width_p-1:0]  fetch_instr_pc_o
    , output [instr_width_gp-1:0] fetch_instr_o
    , output                      fetch_instr_v_o
-   , output                      fetch_is_second_half_o
+   , output                      fetch_partial_o
    , input                       fetch_instr_yumi_i
    );
 
@@ -74,7 +74,7 @@ module bp_fe_realigner
      ,.data_o (half_buffer_v_r)
      );
 
-  assign fetch_is_second_half_o = half_buffer_v_r;
+  assign fetch_partial_o = half_buffer_v_r;
 
   assign fetch_instr_v_o  = (half_buffer_v_r | fetch_pc_is_aligned) & fetch_v_i;
   assign fetch_instr_pc_o = half_buffer_v_r ? fetch_instr_pc_r                             : fetch_pc_i;

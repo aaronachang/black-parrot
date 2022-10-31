@@ -37,14 +37,14 @@ module bp_fe_pc_gen
    , output logic                                    ovr_o
    , input                                           if2_we_i
 
-   , input [instr_width_gp-1:0]                      fetch_i
-   , input                                           fetch_v_i
-   , output [instr_width_gp-1:0]                     fetch_instr_o
-   , output                                          fetch_instr_v_o
-   , input                                           fetch_instr_yumi_i
+   , input [instr_width_gp-1:0]                      fetch_instr_i
+   , input                                           fetch_instr_v_i
    , output logic [branch_metadata_fwd_width_p-1:0]  fetch_br_metadata_fwd_o
-   , output logic [vaddr_width_p-1:0]                fetch_pc_o
-   , output                                          fetch_is_second_half_o
+   , input [vaddr_width_p-1:0]                       fetch_pc_i
+   , input                                           fetch_partial_i
+   , output logic                                    fetch_taken_branch_site_o
+
+   , output logic [vaddr_width_p-1:0]                if2_pc_o
 
    , input [vaddr_width_p-1:0]                       attaboy_pc_i
    , input [branch_metadata_fwd_width_p-1:0]         attaboy_br_metadata_fwd_i
@@ -280,22 +280,22 @@ module bp_fe_pc_gen
   bp_fe_instr_scan
    #(.bp_params_p(bp_params_p))
    instr_scan
-    (.instr_i(fetch_instr_o)
+    (.instr_i(fetch_instr_i)
      ,.scan_o(scan_instr)
      ,.imm_o(scan_imm)
      );
 
-  assign fetch_instr_br_v_li   = fetch_instr_yumi_i & scan_instr.branch;
-  assign fetch_instr_jal_v_li  = fetch_instr_yumi_i & scan_instr.jal;
-  assign fetch_instr_jalr_v_li = fetch_instr_yumi_i & scan_instr.jalr;
-  assign fetch_instr_call_v_li = fetch_instr_yumi_i & scan_instr.call;
-  assign fetch_instr_return_v_li = fetch_instr_yumi_i & scan_instr._return;
+  assign fetch_instr_br_v_li   = fetch_instr_v_i & scan_instr.branch;
+  assign fetch_instr_jal_v_li  = fetch_instr_v_i & scan_instr.jal;
+  assign fetch_instr_jalr_v_li = fetch_instr_v_i & scan_instr.jalr;
+  assign fetch_instr_call_v_li = fetch_instr_v_i & scan_instr.call;
+  assign fetch_instr_return_v_li = fetch_instr_v_i & scan_instr._return;
 
   ///////////////////////////
   // RAS
   ///////////////////////////
   logic ras_valid_lo;
-  wire [vaddr_width_p-1:0] return_addr_if2 = fetch_pc_o + vaddr_width_p'(4);
+  wire [vaddr_width_p-1:0] return_addr_if2 = fetch_pc_i + vaddr_width_p'(4);
   bp_fe_ras
    #(.bp_params_p(bp_params_p))
    ras
@@ -320,70 +320,31 @@ module bp_fe_pc_gen
 
   wire taken_ret_if2 = fetch_instr_return_v_li & ras_valid_lo;
   wire taken_br_if2 = fetch_instr_br_v_li & pred_if1_r;
+  wire taken_jmp_if2 = fetch_instr_jal_v_li;
 
   wire taken_jump_site_if2 = taken_if1_r || taken_ret_if2 || taken_br_if2 || ovr_jmp;
+  assign fetch_taken_branch_site_o = taken_jump_site_if2;
   wire pc_if2_misaligned = !`bp_addr_is_aligned(pc_if2_r, rv64_instr_width_bytes_gp);
 
   assign ovr_ret    = btb_miss_ras & taken_ret_if2;
   assign ovr_btaken = btb_miss_br & taken_br_if2;
-  assign ovr_jmp    = btb_miss_br & fetch_instr_jal_v_li;
+  assign ovr_jmp    = btb_miss_br & taken_jmp_if2;
   assign ovr_ntaken = compressed_support_p
-                    & fetch_v_i
+                    & fetch_instr_v_i
                     & taken_if1_r
-                    & (  (!fetch_is_second_half_o && pc_if2_misaligned)
-                      || ( fetch_is_second_half_o && !taken_jump_site_if2 )
-                      || ( fetch_is_second_half_o && !fetch_instr_v_o ));
-  wire fetch_half_v =    (!fetch_is_second_half_o && pc_if2_misaligned)
-                      || ( fetch_is_second_half_o && !taken_jump_site_if2 );
+                    & (  (!fetch_partial_i && pc_if2_misaligned)
+                      || ( fetch_partial_i && !taken_jump_site_if2 )
+                      || ( fetch_partial_i && !fetch_instr_v_i ));
+  wire fetch_store_v = (!fetch_partial_i && pc_if2_misaligned)
+                      || ( fetch_partial_i && !taken_jump_site_if2 );
   assign ovr_o      = ovr_btaken | ovr_jmp | ovr_ret | ovr_ntaken;
-  assign br_tgt_lo  = fetch_pc_o + scan_imm;
+  assign br_tgt_lo  = fetch_pc_i + scan_imm;
 
-  assign fetch_resume_pc_o = pc_if2_r;
   assign fetch_br_metadata_fwd_o = metadata_if2_r;
 
-  if (compressed_support_p)
-    begin : fetch_instr_generation
-      bp_fe_realigner
-        #(.bp_params_p(bp_params_p))
-        realigner
-        (.clk_i(clk_i)
-        ,.reset_i(reset_i)
+  assign if2_pc_o = pc_if2_r;
 
-        ,.fetch_v_i      (fetch_v_i)
-        ,.fetch_store_v_i(fetch_half_v)
-        ,.fetch_pc_i     (pc_if2_r)
-        ,.fetch_data_i   (fetch_i)
-
-        ,.redirect_v_i      (redirect_v_i)
-        ,.redirect_resume_i (redirect_resume_v_i)
-        ,.redirect_partial_i(redirect_resume_instr_i)
-        ,.redirect_vaddr_i  (redirect_pc_i)
-
-        ,.fetch_instr_pc_o      (fetch_pc_o)
-        ,.fetch_instr_o         (fetch_instr_o)
-        ,.fetch_instr_v_o       (fetch_instr_v_o)
-        ,.fetch_is_second_half_o(fetch_is_second_half_o)
-        ,.fetch_instr_yumi_i    (fetch_instr_yumi_i)
-        );
-
-      // Debug signals for pc_gen_tracer
-      wire                           half_buffer_v_r  = realigner.half_buffer_v_r;
-      wire [vaddr_width_p-1:0]       fetch_instr_pc_r = realigner.fetch_instr_pc_r;
-      wire [instr_half_width_gp-1:0] half_buffer_r    = realigner.half_buffer_r;
-    end
-  else
-    begin : fetch_instr_generation
-      assign fetch_pc_o      = pc_if2_r;
-      assign fetch_instr_o   = fetch_i;
-      assign fetch_instr_v_o = fetch_v_i;
-      assign fetch_is_second_half_o = 0;
-
-      // Debug signals for pc_gen_tracer
-      wire                           half_buffer_v_r  = '0;
-      wire [vaddr_width_p-1:0]       fetch_instr_pc_r = '0;
-      wire [instr_half_width_gp-1:0] half_buffer_r    = '0;
-    end
-
+  ///////////////////////////
   // Global history
   ///////////////////////////
   assign ghistory_n = redirect_br_v_i
