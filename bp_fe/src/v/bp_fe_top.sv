@@ -115,7 +115,7 @@ module bp_fe_top
   logic ovr_lo, if1_we, if2_we;
   logic pc_gen_init_done_lo;
   logic [vaddr_width_p-1:0] if2_pc;
-  logic fetch_taken_branch_site_lo;
+  logic if2_taken_branch_site_lo;
   bp_fe_pc_gen
    #(.bp_params_p(bp_params_p))
    pc_gen
@@ -145,7 +145,7 @@ module bp_fe_top
      ,.fetch_instr_v_i(fetch_instr_v_li)
      ,.if2_br_metadata_fwd_o(if2_br_metadata_fwd_lo)
      ,.fetch_partial_i(fetch_partial_lo)
-     ,.fetch_taken_branch_site_o(fetch_taken_branch_site_lo)
+     ,.if2_taken_branch_site_o(if2_taken_branch_site_lo)
      ,.fetch_pc_i(fetch_pc_lo)
 
      ,.attaboy_pc_i(attaboy_pc_li)
@@ -356,10 +356,10 @@ module bp_fe_top
     (.clk_i(clk_i)
      ,.reset_i(reset_i)
 
-     ,.fetch_v_i(icache_data_v_lo & icache_yumi_lo)
-     ,.fetch_taken_branch_site_i(fetch_taken_branch_site_lo)
-     ,.fetch_pc_i(if2_pc)
-     ,.fetch_data_i(icache_data_lo)
+     ,.if2_v_i(icache_data_v_lo & icache_yumi_lo)
+     ,.if2_taken_branch_site_i(if2_taken_branch_site_lo)
+     ,.if2_pc_i(if2_pc)
+     ,.if2_data_i(icache_data_lo)
 
      ,.redirect_v_i(redirect_v_li)
      ,.redirect_resume_i(redirect_resume_v_li)

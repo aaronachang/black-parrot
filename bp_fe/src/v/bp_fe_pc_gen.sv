@@ -35,15 +35,15 @@ module bp_fe_pc_gen
    , output logic                                    ovr_o
    , input                                           if2_we_i
 
-   , input [instr_width_gp-1:0]                      fetch_instr_i
-   , input                                           fetch_instr_v_i
    , output logic [branch_metadata_fwd_width_p-1:0]  if2_br_metadata_fwd_o
-   , input [vaddr_width_p-1:0]                       fetch_pc_i
-   , input                                           fetch_partial_i
-   , output logic                                    fetch_taken_branch_site_o
-
+   , output logic                                    if2_taken_branch_site_o
    , output logic [vaddr_width_p-1:0]                if2_pc_o
    , input                                           if2_v_i
+
+   , input [instr_width_gp-1:0]                      fetch_instr_i
+   , input                                           fetch_instr_v_i
+   , input [vaddr_width_p-1:0]                       fetch_pc_i
+   , input                                           fetch_partial_i
 
    , input [vaddr_width_p-1:0]                       attaboy_pc_i
    , input [branch_metadata_fwd_width_p-1:0]         attaboy_br_metadata_fwd_i
@@ -82,9 +82,9 @@ module bp_fe_pc_gen
   logic [vaddr_width_p-1:0] ras_tgt_lo;
   logic [vaddr_width_p-1:0] br_tgt_lo;
   logic [vaddr_width_p-1:0] linear_tgt_lo;
-  logic [btb_tag_width_p-1:0] btb_tag_if1;
-  logic [btb_idx_width_p-1:0] btb_idx_if1;
-  logic [bht_idx_width_p-1:0] bht_idx_if1;
+  logic [btb_tag_width_p-1:0] btb_tag;
+  logic [btb_idx_width_p-1:0] btb_idx;
+  logic [bht_idx_width_p-1:0] bht_idx;
 
   // Note: "if" chain duplicated in in bp_fe_nonsynth_pc_gen_tracer.sv
   always_comb begin
@@ -120,9 +120,9 @@ module bp_fe_pc_gen
         next_metadata.src_ras = ovr_ret;
         next_metadata.bht_row = bht_row_lo;
         next_metadata.ghist   = ghistory_r;
-        next_metadata.btb_tag = btb_tag_if1;
-        next_metadata.btb_idx = btb_idx_if1;
-        next_metadata.bht_idx = bht_idx_if1;
+        next_metadata.btb_tag = btb_tag;
+        next_metadata.btb_idx = btb_idx;
+        next_metadata.bht_idx = bht_idx;
       end
   end
   assign next_pc_o = next_pc;
@@ -237,13 +237,12 @@ module bp_fe_pc_gen
       metadata_if1.site_return |= scan_instr._return;
     end
 
-  // TODO: mask all usages of BTB and BHT outputs if read was not performed last cycle
   assign btb_taken = btb_br_tgt_v_lo & (bht_pred_lo | btb_br_tgt_jmp_lo);
   assign pc_plus4  = pc_if1_r + vaddr_width_p'(4);
 
-  assign btb_tag_if1 = pc_if1_r[btb_ignored_bits_p+btb_idx_width_p+:btb_tag_width_p];
-  assign btb_idx_if1 = pc_if1_r[btb_ignored_bits_p+:btb_idx_width_p];
-  assign bht_idx_if1 = pc_if1_r[bht_ignored_bits_p+:bht_idx_width_p];
+  assign btb_tag = pc_if1_r[btb_ignored_bits_p+btb_idx_width_p+:btb_tag_width_p];
+  assign btb_idx = pc_if1_r[btb_ignored_bits_p+:btb_idx_width_p];
+  assign bht_idx = pc_if1_r[bht_ignored_bits_p+:bht_idx_width_p];
 
   /////////////////////////////////////////////////////////////////////////////////////
   // IF2
@@ -292,19 +291,19 @@ module bp_fe_pc_gen
      );
 
   // Override calculations
+  wire btb_miss_ras = pc_if1_r != ras_tgt_lo;
+  wire btb_miss_br  = pc_if1_r != br_tgt_lo;
+
   // TODO: ras_valid_lo can degrade performance in some edge cases. However,
   //   the fix for this (recovering the ras stack on misprediction) is the
   //   same amount of work as creating a multiple element ras. So, let's
   //   punt this for now
-  wire btb_miss_ras = pc_if1_r != ras_tgt_lo;
-  wire btb_miss_br  = pc_if1_r != br_tgt_lo;
-
   wire taken_ret_if2 = scan_instr._return & ras_valid_lo;
   wire taken_br_if2 = scan_instr.branch & pred_if1_r;
   wire taken_jmp_if2 = scan_instr.jal;
 
   wire taken_branch_site_if2 = taken_if1_r || taken_ret_if2 || taken_br_if2 || taken_jmp_if2;
-  assign fetch_taken_branch_site_o = taken_branch_site_if2;
+  assign if2_taken_branch_site_o = taken_branch_site_if2;
   wire pc_if2_misaligned = !`bp_addr_is_aligned(pc_if2_r, rv64_instr_width_bytes_gp);
 
   assign ovr_ret    = btb_miss_ras & taken_ret_if2;
