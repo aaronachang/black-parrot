@@ -28,8 +28,6 @@ module bp_fe_pc_gen
    , input                                           redirect_br_taken_i
    , input                                           redirect_br_ntaken_i
    , input                                           redirect_br_nonbr_i
-   , input                                           redirect_resume_v_i
-   , input [instr_half_width_gp-1:0]                 redirect_resume_instr_i
 
    , output logic [vaddr_width_p-1:0]                next_pc_o
    , input                                           if1_we_i
@@ -45,6 +43,7 @@ module bp_fe_pc_gen
    , output logic                                    fetch_taken_branch_site_o
 
    , output logic [vaddr_width_p-1:0]                if2_pc_o
+   , input                                           if2_v_i
 
    , input [vaddr_width_p-1:0]                       attaboy_pc_i
    , input [branch_metadata_fwd_width_p-1:0]         attaboy_br_metadata_fwd_i
@@ -102,15 +101,11 @@ module bp_fe_pc_gen
 
         next_metadata = redirect_br_metadata_fwd;
       end
-    else if (ovr_ntaken) begin
-        next_pred  = '0;
-        next_pc           = pc_plus4_if2;
-        next_taken = '0;
-    end else if (ovr_o)
+    else if (ovr_o)
       begin
         next_pred  = ovr_btaken;
         next_taken = ovr_ret | ovr_btaken | ovr_jmp;
-        next_pc    = ovr_ret ? ras_tgt_lo : br_tgt_lo;
+        next_pc    = ovr_ntaken ? pc_plus4_if2 : ovr_ret ? ras_tgt_lo : br_tgt_lo;
 
         next_metadata = ovr_metadata;
         next_metadata.site_br     = fetch_instr_br_v_li;
@@ -322,21 +317,19 @@ module bp_fe_pc_gen
   wire taken_br_if2 = fetch_instr_br_v_li & pred_if1_r;
   wire taken_jmp_if2 = fetch_instr_jal_v_li;
 
-  wire taken_jump_site_if2 = taken_if1_r || taken_ret_if2 || taken_br_if2 || ovr_jmp;
-  assign fetch_taken_branch_site_o = taken_jump_site_if2;
+  wire taken_branch_site_if2 = taken_if1_r || taken_ret_if2 || taken_br_if2 || taken_jmp_if2;
+  assign fetch_taken_branch_site_o = taken_branch_site_if2;
   wire pc_if2_misaligned = !`bp_addr_is_aligned(pc_if2_r, rv64_instr_width_bytes_gp);
 
   assign ovr_ret    = btb_miss_ras & taken_ret_if2;
   assign ovr_btaken = btb_miss_br & taken_br_if2;
   assign ovr_jmp    = btb_miss_br & taken_jmp_if2;
   assign ovr_ntaken = compressed_support_p
-                    & fetch_instr_v_i
+                    & if2_v_i
                     & taken_if1_r
                     & (  (!fetch_partial_i && pc_if2_misaligned)
-                      || ( fetch_partial_i && !taken_jump_site_if2 )
-                      || ( fetch_partial_i && !fetch_instr_v_i ));
-  wire fetch_store_v = (!fetch_partial_i && pc_if2_misaligned)
-                      || ( fetch_partial_i && !taken_jump_site_if2 );
+                      || ( fetch_partial_i && !taken_branch_site_if2 )
+                      || ( fetch_partial_i && !fetch_instr_v_i));
   assign ovr_o      = ovr_btaken | ovr_jmp | ovr_ret | ovr_ntaken;
   assign br_tgt_lo  = fetch_pc_i + scan_imm;
 

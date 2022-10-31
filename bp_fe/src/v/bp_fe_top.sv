@@ -131,8 +131,6 @@ module bp_fe_top
      ,.redirect_br_taken_i(redirect_br_taken_li)
      ,.redirect_br_ntaken_i(redirect_br_ntaken_li)
      ,.redirect_br_nonbr_i(redirect_br_nonbr_li)
-     ,.redirect_resume_v_i(redirect_resume_v_li)
-     ,.redirect_resume_instr_i(redirect_resume_instr_li)
 
      ,.next_pc_o(next_pc_lo)
      ,.if1_we_i(if1_we)
@@ -141,9 +139,10 @@ module bp_fe_top
      ,.if2_we_i(if2_we)
 
      ,.if2_pc_o(if2_pc)
+     ,.if2_v_i(icache_data_v_lo & icache_yumi_li)
 
      ,.fetch_instr_i(fetch_instr_li)
-     ,.fetch_instr_v_i(icache_data_v_lo & icache_yumi_li)
+     ,.fetch_instr_v_i(fetch_instr_v_li)
      ,.fetch_br_metadata_fwd_o(fetch_br_metadata_fwd_lo)
      ,.fetch_partial_i(fetch_partial_lo)
      ,.fetch_taken_branch_site_o(fetch_taken_branch_site_lo)
@@ -334,6 +333,7 @@ module bp_fe_top
      ,.if2_we_o(if2_we)
      ,.poison_if1_o(poison_if1_lo)
      ,.poison_if2_o(poison_if2_lo)
+     ,.fetch_exception_v_i(fetch_exception_v_li)
 
      ,.itlb_r_v_o(itlb_r_v_li)
      ,.itlb_w_v_o(itlb_w_v_li)
@@ -348,40 +348,30 @@ module bp_fe_top
 
      ,.shadow_translation_en_w_o(shadow_translation_en_w)
      ,.shadow_translation_en_o(shadow_translation_en_n)
-
-     ,.fetch_instr_v_i(fetch_instr_v_li)
-     ,.fetch_exception_v_i(fetch_exception_v_li)
-     ,.fetch_instr_i(fetch_instr_lo)
      );
 
+  bp_fe_realigner
+   #(.bp_params_p(bp_params_p))
+   realigner
+    (.clk_i(clk_i)
+     ,.reset_i(reset_i)
 
-  wire pc_if2_misaligned = !`bp_addr_is_aligned(if2_pc, rv64_instr_width_bytes_gp);
+     ,.fetch_v_i(icache_data_v_lo & icache_yumi_lo)
+     ,.fetch_taken_branch_site_i(fetch_taken_branch_site_lo)
+     ,.fetch_pc_i(if2_pc)
+     ,.fetch_data_i(icache_data_lo)
 
-  wire fetch_store_v = (!fetch_partial_lo && pc_if2_misaligned)
-                      || ( fetch_partial_lo && !fetch_taken_branch_site_lo);
+     ,.redirect_v_i(redirect_v_li)
+     ,.redirect_resume_i(redirect_resume_v_li)
+     ,.redirect_partial_i(redirect_resume_instr_li)
+     ,.redirect_vaddr_i(redirect_pc_li)
 
-   bp_fe_realigner
-    #(.bp_params_p(bp_params_p))
-    realigner
-     (.clk_i(clk_i)
-      ,.reset_i(reset_i)
-
-      ,.fetch_v_i(icache_data_v_lo & icache_yumi_lo)
-      ,.fetch_store_v_i(fetch_store_v)
-      ,.fetch_pc_i(if2_pc)
-      ,.fetch_data_i(icache_data_lo)
-
-      ,.redirect_v_i(redirect_v_li)
-      ,.redirect_resume_i(redirect_resume_v_li)
-      ,.redirect_partial_i(redirect_resume_instr_li)
-      ,.redirect_vaddr_i(redirect_pc_li)
-
-      ,.fetch_instr_pc_o(fetch_pc_lo)
-      ,.fetch_instr_o(fetch_instr_lo)
-      ,.fetch_instr_v_o(fetch_instr_v_lo)
-      ,.fetch_partial_o(fetch_partial_lo)
-      ,.fetch_instr_yumi_i(fetch_instr_v_li)
-      );
+     ,.fetch_instr_pc_o(fetch_pc_lo)
+     ,.fetch_instr_o(fetch_instr_lo)
+     ,.fetch_instr_v_o(fetch_instr_v_lo)
+     ,.fetch_partial_o(fetch_partial_lo)
+     ,.fetch_instr_yumi_i(fetch_instr_v_li)
+     );
 
   always_comb
     begin

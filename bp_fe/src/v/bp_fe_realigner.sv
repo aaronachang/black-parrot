@@ -18,7 +18,7 @@ module bp_fe_realigner
 
    // Fetch PC and I$ data
    , input                       fetch_v_i
-   , input                       fetch_store_v_i
+   , input                       fetch_taken_branch_site_i
    , input [vaddr_width_p-1:0]   fetch_pc_i
    , input [instr_width_gp-1:0]  fetch_data_i
 
@@ -45,6 +45,9 @@ module bp_fe_realigner
 
   wire fetch_pc_is_aligned  = `bp_addr_is_aligned(fetch_pc_i, rv64_instr_width_bytes_gp);
 
+  wire fetch_store_v = (!fetch_partial_o && !fetch_pc_is_aligned)
+                      || ( fetch_partial_o && !fetch_taken_branch_site_i);
+
   assign fetch_instr_pc_n = redirect_resume_i                       ? (redirect_vaddr_i - vaddr_width_p'(2))
                           : (half_buffer_v_r & fetch_pc_is_aligned) ? (fetch_pc_i       + vaddr_width_p'(2))
                           :                                            fetch_pc_i;
@@ -58,7 +61,7 @@ module bp_fe_realigner
     (.clk_i(clk_i)
      ,.reset_i(reset_i)
 
-     ,.en_i  ((fetch_v_i & fetch_store_v_i) | redirect_resume_i)
+     ,.en_i  ((fetch_v_i & fetch_store_v) | redirect_resume_i)
      ,.data_i({fetch_instr_pc_n, half_buffer_n})
      ,.data_o({fetch_instr_pc_r, half_buffer_r})
      );
@@ -69,7 +72,7 @@ module bp_fe_realigner
     (.clk_i(clk_i)
      ,.reset_i(reset_i)
 
-     ,.set_i  (~poison_li & (fetch_v_i & fetch_store_v_i) )
+     ,.set_i  (~poison_li & (fetch_v_i & fetch_store_v) )
      ,.clear_i(poison_li | fetch_instr_yumi_i) // set overrides clear
      ,.data_o (half_buffer_v_r)
      );

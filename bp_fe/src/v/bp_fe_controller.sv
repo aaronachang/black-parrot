@@ -31,7 +31,7 @@ module bp_fe_controller
    , output logic                                     redirect_br_nonbr_o
    , output logic [branch_metadata_fwd_width_p-1:0]   redirect_br_metadata_fwd_o
    , output logic                                     redirect_resume_v_o
-   , output logic [instr_width_gp/2-1:0]                redirect_resume_instr_o
+   , output logic [instr_half_width_gp-1:0]           redirect_resume_instr_o
 
    , output logic [vaddr_width_p-1:0]                 attaboy_pc_o
    , output logic                                     attaboy_taken_o
@@ -48,6 +48,7 @@ module bp_fe_controller
    , output logic                                     if2_we_o
    , output logic                                     poison_if1_o
    , output logic                                     poison_if2_o
+   , input                                            fetch_exception_v_i
 
    , output logic                                     itlb_r_v_o
    , output logic                                     itlb_w_v_o
@@ -62,10 +63,6 @@ module bp_fe_controller
 
    , output logic                                     shadow_translation_en_w_o
    , output logic                                     shadow_translation_en_o
-
-   , input                                            fetch_instr_v_i
-   , input                                            fetch_exception_v_i
-   , input [instr_width_gp-1:0]                       fetch_instr_i
    );
 
   `declare_bp_core_if(vaddr_width_p, paddr_width_p, asid_width_p, branch_metadata_fwd_width_p);
@@ -148,7 +145,6 @@ module bp_fe_controller
     | cmd_immediate_v
     | (~is_resume & cmd_complex_v);
 
-
   assign redirect_resume_v_o = (compressed_support_p & itlb_fill_response_v & (fe_cmd_cast_i.opcode == e_op_itlb_fill_resume))
                                     | (compressed_support_p & icache_fill_response_v & (fe_cmd_cast_i.opcode == e_op_icache_fill_resume));
   assign redirect_resume_instr_o = !compressed_support_p   ? '0
@@ -173,7 +169,7 @@ module bp_fe_controller
           end
         e_wait, e_run:
           begin
-            icache_v_o = (is_run & ~cmd_complex_v) || (is_wait && cmd_nonattaboy_v);
+            icache_v_o = (is_run & ~cmd_complex_v) || (is_wait && cmd_immediate_v);
             if1_we_o = icache_yumi_i & ~cmd_complex_v;
             itlb_r_v_o = icache_yumi_i;
             itlb_w_v_o = itlb_fill_response_v;
