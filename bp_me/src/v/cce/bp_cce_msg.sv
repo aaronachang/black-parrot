@@ -420,6 +420,9 @@ module bp_cce_msg
             lce_cmd_header_cast_o.payload.way_id = mem_rev_header_cast_i.payload.way_id;
             lce_cmd_header_cast_o.payload.state = bp_coh_states_e'(spec_bits_i.state);
 
+            // command data
+            lce_cmd_data_o = mem_rev_data_i;
+
             // decrement pending bit on lce cmd header send
             pending_w_v_o = mem_rev_yumi_o & mem_rev_new_i;
             pending_w_addr_o = mem_rev_header_cast_i.addr;
@@ -449,6 +452,9 @@ module bp_cce_msg
             lce_cmd_header_cast_o.payload.dst_id = mem_rev_header_cast_i.payload.lce_id;
             lce_cmd_header_cast_o.payload.way_id = mem_rev_header_cast_i.payload.way_id;
             lce_cmd_header_cast_o.payload.state = mem_rev_header_cast_i.payload.state;
+
+            // command data
+            lce_cmd_data_o = mem_rev_data_i;
 
             // decrement pending bit on lce cmd header send
             pending_w_v_o = mem_rev_yumi_o & mem_rev_new_i;
@@ -483,6 +489,9 @@ module bp_cce_msg
           lce_cmd_header_cast_o.payload.way_id = mem_rev_header_cast_i.payload.way_id;
           lce_cmd_header_cast_o.payload.state = mem_rev_header_cast_i.payload.state;
 
+          // command data
+          lce_cmd_data_o = mem_rev_data_i;
+
           // decrement pending bit on mem response dequeue (same as lce cmd send)
           pending_w_v_o = mem_rev_yumi_o & mem_rev_new_i;
           pending_w_addr_o = mem_rev_header_cast_i.addr;
@@ -511,6 +520,9 @@ module bp_cce_msg
 
           // command payload
           lce_cmd_header_cast_o.payload.dst_id = mem_rev_header_cast_i.payload.lce_id;
+
+          // command data
+          lce_cmd_data_o = mem_rev_data_i;
 
           // decrement pending bits if operating in normal mode and request was made
           // to coherent memory space
@@ -542,6 +554,9 @@ module bp_cce_msg
 
           // command payload
           lce_cmd_header_cast_o.payload.dst_id = mem_rev_header_cast_i.payload.lce_id;
+
+          // command data
+          lce_cmd_data_o = mem_rev_data_i;
 
           // decrement pending bits if operating in normal mode and request was made
           // to coherent memory space

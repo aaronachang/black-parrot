@@ -333,6 +333,7 @@ module bp_cce
      ,.msg_last_o(lce_cmd_last_o)
 
      ,.fsm_header_i(fsm_cmd_header_lo)
+     ,.fsm_addr_o()
      ,.fsm_data_i(fsm_cmd_data_lo)
      ,.fsm_v_i(fsm_cmd_v_lo)
      ,.fsm_ready_and_o(fsm_cmd_ready_and_li)

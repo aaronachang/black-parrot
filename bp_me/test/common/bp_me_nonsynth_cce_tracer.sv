@@ -174,7 +174,7 @@ module bp_me_nonsynth_cce_tracer
         end
         if (mem_rev_header_cast_i.msg_type.rev == e_bedrock_mem_rd
             | mem_rev_header_cast_i.msg_type.rev == e_bedrock_mem_uc_rd) begin
-        $fdisplay(file, "%12t |: CCE[%0d] MEM DATA RESP addr[%H] wg[%0d] lce[%0d] way[%0d] state[%3b] spec[%0b] uc[%0b] last[%0b] %H"
+        $fdisplay(file, "%12t |: CCE[%0d] MEM REV addr[%H] wg[%0d] lce[%0d] way[%0d] state[%3b] spec[%0b] uc[%0b] last[%0b] %H"
                  , $time, cce_id_i, mem_rev_header_cast_i.addr
                  , mem_rev_header_cast_i.addr[lg_block_size_in_bytes_lp +: lg_cce_way_groups_lp]
                  , mem_rev_header_cast_i.payload.lce_id, mem_rev_header_cast_i.payload.way_id
