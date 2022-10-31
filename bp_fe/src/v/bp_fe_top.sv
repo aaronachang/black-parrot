@@ -109,7 +109,7 @@ module bp_fe_top
   logic [vaddr_width_p-1:0] fetch_pc_lo;
   logic fetch_v_li, fetch_instr_v_li, fetch_exception_v_li;
   logic fetch_instr_v_lo, fetch_partial_lo, fetch_instr_yumi_li;
-  bp_fe_branch_metadata_fwd_s fetch_br_metadata_fwd_lo;
+  bp_fe_branch_metadata_fwd_s if2_br_metadata_fwd_lo;
   logic [vaddr_width_p-1:0] next_pc_lo;
   logic next_pc_v_li;
   logic ovr_lo, if1_we, if2_we;
@@ -143,7 +143,7 @@ module bp_fe_top
 
      ,.fetch_instr_i(fetch_instr_li)
      ,.fetch_instr_v_i(fetch_instr_v_li)
-     ,.fetch_br_metadata_fwd_o(fetch_br_metadata_fwd_lo)
+     ,.if2_br_metadata_fwd_o(if2_br_metadata_fwd_lo)
      ,.fetch_partial_i(fetch_partial_lo)
      ,.fetch_taken_branch_site_o(fetch_taken_branch_site_lo)
      ,.fetch_pc_i(fetch_pc_lo)
@@ -389,7 +389,7 @@ module bp_fe_top
                                            ? e_icache_miss
                                            : e_instr_fetch;
       fe_queue_cast_o.instr = fetch_instr_lo;
-      fe_queue_cast_o.branch_metadata_fwd = fetch_br_metadata_fwd_lo;
+      fe_queue_cast_o.branch_metadata_fwd = if2_br_metadata_fwd_lo;
       fe_queue_cast_o.partial_v = compressed_support_p & fetch_partial_lo & fe_exception_v;
     end
 

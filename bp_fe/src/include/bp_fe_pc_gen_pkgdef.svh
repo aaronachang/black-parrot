@@ -15,6 +15,7 @@
       logic jalr;
       logic call;
       logic _return;
+      logic [rv64_imm12_width_gp-1:0] imm12;
     }  bp_fe_instr_scan_s;
 
 `endif
