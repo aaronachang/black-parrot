@@ -96,6 +96,8 @@ module bp_fe_top
   logic icache_v_li, icache_force_li, icache_yumi_lo;
   logic icache_tv_we, icache_data_v_lo, icache_spec_v_lo, icache_fence_v_lo, icache_yumi_li;
 
+  logic fetch_rename_me_lo;
+
   logic redirect_v_li;
   logic [vaddr_width_p-1:0] redirect_pc_li;
   logic redirect_br_v_li, redirect_br_taken_li, redirect_br_ntaken_li, redirect_br_nonbr_li;
@@ -139,14 +141,15 @@ module bp_fe_top
      ,.if2_we_i(if2_we)
 
      ,.if2_pc_o(if2_pc)
-     ,.if2_v_i(icache_data_v_lo & icache_yumi_li)
+     ,.if2_br_metadata_fwd_o(if2_br_metadata_fwd_lo)
+     ,.if2_taken_branch_site_o(if2_taken_branch_site_lo)
+     ,.icache_v_i(icache_data_v_lo & icache_yumi_li)
 
      ,.fetch_instr_i(fetch_instr_li)
      ,.fetch_instr_v_i(fetch_instr_v_li)
-     ,.if2_br_metadata_fwd_o(if2_br_metadata_fwd_lo)
      ,.fetch_partial_i(fetch_partial_lo)
-     ,.if2_taken_branch_site_o(if2_taken_branch_site_lo)
      ,.fetch_pc_i(fetch_pc_lo)
+     ,.fetch_rename_me_i(fetch_rename_me_lo)
 
      ,.attaboy_pc_i(attaboy_pc_li)
      ,.attaboy_br_metadata_fwd_i(attaboy_br_metadata_fwd_li)
@@ -356,7 +359,7 @@ module bp_fe_top
     (.clk_i(clk_i)
      ,.reset_i(reset_i)
 
-     ,.if2_v_i(icache_data_v_lo & icache_yumi_lo)
+     ,.icache_v_i(icache_data_v_lo & icache_yumi_lo)
      ,.if2_taken_branch_site_i(if2_taken_branch_site_lo)
      ,.if2_pc_i(if2_pc)
      ,.if2_data_i(icache_data_lo)
@@ -370,6 +373,7 @@ module bp_fe_top
      ,.fetch_instr_o(fetch_instr_lo)
      ,.fetch_instr_v_o(fetch_instr_v_lo)
      ,.fetch_partial_o(fetch_partial_lo)
+     ,.fetch_rename_me_o(fetch_rename_me_lo)
      ,.fetch_instr_yumi_i(fetch_instr_v_li)
      );
 

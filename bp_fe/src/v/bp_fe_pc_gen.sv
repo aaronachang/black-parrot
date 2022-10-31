@@ -38,12 +38,13 @@ module bp_fe_pc_gen
    , output logic [branch_metadata_fwd_width_p-1:0]  if2_br_metadata_fwd_o
    , output logic                                    if2_taken_branch_site_o
    , output logic [vaddr_width_p-1:0]                if2_pc_o
-   , input                                           if2_v_i
+   , input                                           icache_v_i
 
    , input [instr_width_gp-1:0]                      fetch_instr_i
    , input                                           fetch_instr_v_i
    , input [vaddr_width_p-1:0]                       fetch_pc_i
    , input                                           fetch_partial_i
+   , input                                           fetch_rename_me_i
 
    , input [vaddr_width_p-1:0]                       attaboy_pc_i
    , input [branch_metadata_fwd_width_p-1:0]         attaboy_br_metadata_fwd_i
@@ -261,6 +262,25 @@ module bp_fe_pc_gen
      ,.data_o({pred_if2_r, taken_if2_r, metadata_if2_r, pc_if2_r})
      );
 
+  ///////////////////////////
+  // RAS Storage
+  ///////////////////////////
+  logic ras_valid_lo, ras_call_li, ras_return_li;
+  logic [vaddr_width_p-1:0] ras_addr_li;
+  bp_fe_ras
+   #(.bp_params_p(bp_params_p))
+   ras
+    (.clk_i(clk_i)
+     ,.reset_i(reset_i)
+
+     ,.call_i(ras_call_li)
+     ,.addr_i(ras_addr_li)
+
+     ,.tgt_o(ras_tgt_lo)
+     ,.v_o(ras_valid_lo)
+     ,.return_i(ras_return_li)
+     );
+
   // Scan fetched instruction
   bp_fe_instr_scan_s scan_instr;
   bp_fe_instr_scan
@@ -271,24 +291,9 @@ module bp_fe_pc_gen
      ,.scan_o(scan_instr)
      );
 
-  ///////////////////////////
-  // RAS
-  ///////////////////////////
-  logic ras_valid_lo;
-  wire [vaddr_width_p-1:0] return_addr_if2 = fetch_pc_i + vaddr_width_p'(4);
-  bp_fe_ras
-   #(.bp_params_p(bp_params_p))
-   ras
-    (.clk_i(clk_i)
-     ,.reset_i(reset_i)
-
-     ,.call_i(scan_instr.call)
-     ,.return_i(scan_instr._return)
-
-     ,.addr_i(return_addr_if2)
-     ,.tgt_o(ras_tgt_lo)
-     ,.v_o(ras_valid_lo)
-     );
+  assign ras_call_li = scan_instr.call;
+  assign ras_return_li = scan_instr._return;
+  assign ras_addr_li = fetch_pc_i + vaddr_width_p'(4);
 
   // Override calculations
   wire btb_miss_ras = pc_if1_r != ras_tgt_lo;
@@ -310,11 +315,9 @@ module bp_fe_pc_gen
   assign ovr_btaken = btb_miss_br & taken_br_if2;
   assign ovr_jmp    = btb_miss_br & taken_jmp_if2;
   assign ovr_ntaken = compressed_support_p
-                    & if2_v_i
+                    & icache_v_i
                     & taken_if1_r
-                    & (  (!fetch_partial_i && pc_if2_misaligned)
-                      || ( fetch_partial_i && !taken_branch_site_if2 )
-                      || ( fetch_partial_i && !fetch_instr_v_i));
+                    & fetch_rename_me_i;
   assign ovr_o      = ovr_btaken | ovr_jmp | ovr_ret | ovr_ntaken;
 
   assign br_tgt_lo     = fetch_pc_i + `BSG_SIGN_EXTEND(scan_instr.imm12, vaddr_width_p);
