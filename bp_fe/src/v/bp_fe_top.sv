@@ -64,6 +64,9 @@ module bp_fe_top
   `bp_cast_i(bp_cfg_bus_s, cfg_bus);
   `bp_cast_i(bp_fe_cmd_s, fe_cmd);
 
+  logic [rv64_priv_width_gp-1:0] shadow_priv_lo;
+  logic shadow_translation_en_lo;
+
   logic [rv64_priv_width_gp-1:0] shadow_priv_n, shadow_priv_r;
   logic shadow_priv_w;
   bsg_dff_reset_en_bypass
@@ -88,7 +91,6 @@ module bp_fe_top
      ,.data_o(shadow_translation_en_r)
      );
 
-
   // TEMP
   `declare_bp_fe_icache_pkt_s(vaddr_width_p);
   bp_fe_icache_pkt_s icache_pkt_li;
@@ -96,7 +98,7 @@ module bp_fe_top
   logic icache_v_li, icache_force_li, icache_yumi_lo;
   logic icache_tv_we, icache_data_v_lo, icache_spec_v_lo, icache_fence_v_lo, icache_yumi_li;
 
-  logic fetch_rename_me_lo;
+  logic fetch_linear_lo;
 
   logic redirect_v_li;
   logic [vaddr_width_p-1:0] redirect_pc_li;
@@ -109,7 +111,7 @@ module bp_fe_top
   logic [vaddr_width_p-1:0] attaboy_pc_li;
   logic [instr_width_gp-1:0] fetch_instr_li, fetch_instr_lo;
   logic [vaddr_width_p-1:0] fetch_pc_lo;
-  logic fetch_v_li, fetch_instr_v_li, fetch_exception_v_li;
+  logic fetch_v_li, fetch_instr_yumi_li, fetch_exception_yumi_li;
   logic fetch_instr_v_lo, fetch_partial_lo, fetch_instr_yumi_li;
   bp_fe_branch_metadata_fwd_s if2_br_metadata_fwd_lo;
   logic [vaddr_width_p-1:0] next_pc_lo;
@@ -146,10 +148,10 @@ module bp_fe_top
      ,.icache_v_i(icache_data_v_lo & icache_yumi_li)
 
      ,.fetch_instr_i(fetch_instr_li)
-     ,.fetch_instr_v_i(fetch_instr_v_li)
+     ,.fetch_instr_v_i(fetch_instr_yumi_li)
      ,.fetch_partial_i(fetch_partial_lo)
      ,.fetch_pc_i(fetch_pc_lo)
-     ,.fetch_rename_me_i(fetch_rename_me_lo)
+     ,.fetch_linear_i(fetch_linear_lo)
 
      ,.attaboy_pc_i(attaboy_pc_li)
      ,.attaboy_br_metadata_fwd_i(attaboy_br_metadata_fwd_li)
@@ -297,8 +299,8 @@ module bp_fe_top
   wire fe_instr_v     = fetch_instr_v_lo;
   assign fe_queue_v_o = (fe_instr_v | fe_exception_v);
 
-  assign fetch_instr_v_li     = fe_queue_ready_i & fe_queue_v_o & fe_instr_v;
-  assign fetch_exception_v_li = fe_queue_ready_i & fe_queue_v_o & fe_exception_v;
+  assign fetch_instr_yumi_li     = fe_queue_ready_i & fe_queue_v_o & fe_instr_v;
+  assign fetch_exception_yumi_li = fe_queue_ready_i & fe_queue_v_o & fe_exception_v;
   assign fetch_instr_li       = icache_data_lo;
 
   bp_fe_controller
@@ -336,7 +338,7 @@ module bp_fe_top
      ,.if2_we_o(if2_we)
      ,.poison_if1_o(poison_if1_lo)
      ,.poison_if2_o(poison_if2_lo)
-     ,.fetch_exception_v_i(fetch_exception_v_li)
+     ,.fetch_exception_v_i(fetch_exception_yumi_li)
 
      ,.itlb_r_v_o(itlb_r_v_li)
      ,.itlb_w_v_o(itlb_w_v_li)
@@ -346,11 +348,10 @@ module bp_fe_top
      ,.icache_pkt_o(icache_pkt_li)
      ,.icache_yumi_i(icache_yumi_lo)
 
-     ,.shadow_priv_w_o(shadow_priv_w)
      ,.shadow_priv_o(shadow_priv_n)
-
-     ,.shadow_translation_en_w_o(shadow_translation_en_w)
+     ,.shadow_priv_w_o(shadow_priv_w)
      ,.shadow_translation_en_o(shadow_translation_en_n)
+     ,.shadow_translation_en_w_o(shadow_translation_en_w)
      );
 
   bp_fe_realigner
@@ -373,8 +374,8 @@ module bp_fe_top
      ,.fetch_instr_o(fetch_instr_lo)
      ,.fetch_instr_v_o(fetch_instr_v_lo)
      ,.fetch_partial_o(fetch_partial_lo)
-     ,.fetch_rename_me_o(fetch_rename_me_lo)
-     ,.fetch_instr_yumi_i(fetch_instr_v_li)
+     ,.fetch_linear_o(fetch_linear_lo)
+     ,.fetch_instr_yumi_i(fetch_instr_yumi_li)
      );
 
   always_comb

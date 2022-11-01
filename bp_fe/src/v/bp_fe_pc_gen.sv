@@ -44,7 +44,7 @@ module bp_fe_pc_gen
    , input                                           fetch_instr_v_i
    , input [vaddr_width_p-1:0]                       fetch_pc_i
    , input                                           fetch_partial_i
-   , input                                           fetch_rename_me_i
+   , input                                           fetch_linear_i
 
    , input [vaddr_width_p-1:0]                       attaboy_pc_i
    , input [branch_metadata_fwd_width_p-1:0]         attaboy_br_metadata_fwd_i
@@ -317,7 +317,7 @@ module bp_fe_pc_gen
   assign ovr_ntaken = compressed_support_p
                     & icache_v_i
                     & taken_if1_r
-                    & fetch_rename_me_i;
+                    & fetch_linear_i;
   assign ovr_o      = ovr_btaken | ovr_jmp | ovr_ret | ovr_ntaken;
 
   assign br_tgt_lo     = fetch_pc_i + `BSG_SIGN_EXTEND(scan_instr.imm12, vaddr_width_p);

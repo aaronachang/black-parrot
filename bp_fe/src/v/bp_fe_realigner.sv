@@ -34,7 +34,7 @@ module bp_fe_realigner
    , output [instr_width_gp-1:0] fetch_instr_o
    , output                      fetch_instr_v_o
    , output                      fetch_partial_o
-   , output                      fetch_rename_me_o
+   , output                      fetch_linear_o
    , input                       fetch_instr_yumi_i
    );
 
@@ -85,7 +85,7 @@ module bp_fe_realigner
   assign fetch_instr_pc_o = partial_v_r ? fetch_instr_pc_r                             : if2_pc_i;
   assign fetch_instr_o    = partial_v_r ? { icache_data_lower_half_li, partial_r } : if2_data_i;
 
-  assign fetch_rename_me_o = (!partial_v_r & !if2_pc_is_aligned)
+  assign fetch_linear_o = (!partial_v_r & !if2_pc_is_aligned)
     || (partial_v_r && !if2_taken_branch_site_i)
     || (partial_v_r && !fetch_instr_v_o);
 
