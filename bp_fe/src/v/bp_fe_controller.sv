@@ -48,7 +48,7 @@ module bp_fe_controller
    , output logic                                     if2_we_o
    , output logic                                     poison_if1_o
    , output logic                                     poison_if2_o
-   , input                                            fetch_exception_v_i
+   , input                                            fetch_exception_yumi_i
 
    , output logic                                     itlb_r_v_o
    , output logic                                     itlb_w_v_o
@@ -139,8 +139,8 @@ module bp_fe_controller
       ,spec: !icache_fill_response_v && !is_fence
       };
   assign icache_force_o = cmd_nonattaboy_v;
-  assign poison_if1_o = fetch_exception_v_i;
-  assign poison_if2_o = fetch_exception_v_i
+  assign poison_if1_o = fetch_exception_yumi_i;
+  assign poison_if2_o = fetch_exception_yumi_i
     | ovr_i
     | cmd_immediate_v
     | (~is_resume & cmd_complex_v);
@@ -180,7 +180,7 @@ module bp_fe_controller
                         ? e_fence
                         : cmd_complex_v
                           ? e_resume
-                          : fetch_exception_v_i
+                          : fetch_exception_yumi_i
                             ? e_wait
                             : if1_we_o
                               ? e_run

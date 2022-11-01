@@ -64,9 +64,6 @@ module bp_fe_top
   `bp_cast_i(bp_cfg_bus_s, cfg_bus);
   `bp_cast_i(bp_fe_cmd_s, fe_cmd);
 
-  logic [rv64_priv_width_gp-1:0] shadow_priv_lo;
-  logic shadow_translation_en_lo;
-
   logic [rv64_priv_width_gp-1:0] shadow_priv_n, shadow_priv_r;
   logic shadow_priv_w;
   bsg_dff_reset_en_bypass
@@ -99,6 +96,7 @@ module bp_fe_top
   logic icache_tv_we, icache_data_v_lo, icache_spec_v_lo, icache_fence_v_lo, icache_yumi_li;
 
   logic fetch_linear_lo;
+  bp_fe_instr_scan_s fetch_scan;
 
   logic redirect_v_li;
   logic [vaddr_width_p-1:0] redirect_pc_li;
@@ -112,7 +110,7 @@ module bp_fe_top
   logic [instr_width_gp-1:0] fetch_instr_li, fetch_instr_lo;
   logic [vaddr_width_p-1:0] fetch_pc_lo;
   logic fetch_v_li, fetch_instr_yumi_li, fetch_exception_yumi_li;
-  logic fetch_instr_v_lo, fetch_partial_lo, fetch_instr_yumi_li;
+  logic fetch_instr_v_lo, fetch_partial_lo;
   bp_fe_branch_metadata_fwd_s if2_br_metadata_fwd_lo;
   logic [vaddr_width_p-1:0] next_pc_lo;
   logic next_pc_v_li;
@@ -147,8 +145,7 @@ module bp_fe_top
      ,.if2_taken_branch_site_o(if2_taken_branch_site_lo)
      ,.icache_v_i(icache_data_v_lo & icache_yumi_li)
 
-     ,.fetch_instr_i(fetch_instr_li)
-     ,.fetch_instr_v_i(fetch_instr_yumi_li)
+     ,.fetch_scan_i(fetch_scan)
      ,.fetch_partial_i(fetch_partial_lo)
      ,.fetch_pc_i(fetch_pc_lo)
      ,.fetch_linear_i(fetch_linear_lo)
@@ -280,7 +277,7 @@ module bp_fe_top
      ,.stat_mem_pkt_yumi_o(stat_mem_pkt_yumi_o)
      ,.stat_mem_o(stat_mem_o)
      );
-  assign icache_yumi_li = fe_queue_ready_i & (icache_data_v_lo | icache_spec_v_lo) | icache_fence_v_lo;
+  assign icache_yumi_li = fe_queue_ready_i & (icache_data_v_lo | icache_spec_v_lo | icache_fence_v_lo);
 
   // This tracks the I$ valid. Could move inside entirely, but we're trying to separate
   //   those responsibilities
@@ -297,11 +294,9 @@ module bp_fe_top
 
   wire fe_exception_v = (instr_access_fault_r | instr_page_fault_r | itlb_miss_r | icache_spec_v_lo);
   wire fe_instr_v     = fetch_instr_v_lo;
-  assign fe_queue_v_o = (fe_instr_v | fe_exception_v);
 
   assign fetch_instr_yumi_li     = fe_queue_ready_i & fe_queue_v_o & fe_instr_v;
   assign fetch_exception_yumi_li = fe_queue_ready_i & fe_queue_v_o & fe_exception_v;
-  assign fetch_instr_li       = icache_data_lo;
 
   bp_fe_controller
    #(.bp_params_p(bp_params_p))
@@ -338,7 +333,7 @@ module bp_fe_top
      ,.if2_we_o(if2_we)
      ,.poison_if1_o(poison_if1_lo)
      ,.poison_if2_o(poison_if2_lo)
-     ,.fetch_exception_v_i(fetch_exception_yumi_li)
+     ,.fetch_exception_yumi_i(fetch_exception_yumi_li)
 
      ,.itlb_r_v_o(itlb_r_v_li)
      ,.itlb_w_v_o(itlb_w_v_li)
@@ -377,7 +372,16 @@ module bp_fe_top
      ,.fetch_linear_o(fetch_linear_lo)
      ,.fetch_instr_yumi_i(fetch_instr_yumi_li)
      );
+  
+  bp_fe_instr_scan
+   #(.bp_params_p(bp_params_p))
+   instr_scan
+    (.instr_i(fetch_instr_lo)
+     ,.instr_v_i(fetch_instr_yumi_li)
+     ,.scan_o(fetch_scan)
+     );
 
+  assign fe_queue_v_o = (fe_instr_v | fe_exception_v);
   always_comb
     begin
       fe_queue_cast_o = '0;
