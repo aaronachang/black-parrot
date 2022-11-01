@@ -83,9 +83,11 @@ module bp_fe_controller
   wire state_reset_v          = fe_cmd_v_i & (fe_cmd_cast_i.opcode == e_op_state_reset);
   wire pc_redirect_v          = fe_cmd_v_i & (fe_cmd_cast_i.opcode == e_op_pc_redirection);
   wire icache_fill_response_v = fe_cmd_v_i & (fe_cmd_cast_i.opcode inside {e_op_icache_fill_restart, e_op_icache_fill_resume});
+  wire icache_fill_resume_v   = compressed_support_p & fe_cmd_v_i & (fe_cmd_cast_i.opcode == e_op_icache_fill_resume);
   wire wait_v                 = fe_cmd_v_i & (fe_cmd_cast_i.opcode == e_op_wait);
 
   wire itlb_fill_response_v   = fe_cmd_v_i & (fe_cmd_cast_i.opcode inside {e_op_itlb_fill_restart, e_op_itlb_fill_resume});
+  wire itlb_fill_resume_v     = compressed_support_p & fe_cmd_v_i & (fe_cmd_cast_i.opcode == e_op_itlb_fill_resume);
   wire icache_fence_v         = fe_cmd_v_i & (fe_cmd_cast_i.opcode == e_op_icache_fence);
   wire itlb_fence_v           = fe_cmd_v_i & (fe_cmd_cast_i.opcode == e_op_itlb_fence);
 
@@ -145,12 +147,8 @@ module bp_fe_controller
     | cmd_immediate_v
     | (~is_resume & cmd_complex_v);
 
-  assign redirect_resume_v_o = (compressed_support_p & itlb_fill_response_v & (fe_cmd_cast_i.opcode == e_op_itlb_fill_resume))
-                                    | (compressed_support_p & icache_fill_response_v & (fe_cmd_cast_i.opcode == e_op_icache_fill_resume));
-  assign redirect_resume_instr_o = !compressed_support_p   ? '0
-                                    : itlb_fill_response_v             ? fe_cmd_cast_i.operands.itlb_fill_response.instr
-                                    : fe_cmd_cast_i.operands.icache_fill_response.instr;
-
+  assign redirect_resume_v_o = itlb_fill_resume_v | icache_fill_resume_v;
+  assign redirect_resume_instr_o = itlb_fill_response_v ? fe_cmd_cast_i.operands.itlb_fill_response.instr : fe_cmd_cast_i.operands.icache_fill_response.instr;
 
   always_comb
     begin
