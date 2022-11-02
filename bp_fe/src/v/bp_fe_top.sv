@@ -318,9 +318,9 @@ module bp_fe_top
     end
   else
     begin : realigner
-      assign fetch_pc_lo = '0;
-      assign fetch_instr_lo = '0;
-      assign fetch_instr_v_lo = '0;
+      assign fetch_pc_lo = if2_pc;
+      assign fetch_instr_lo = icache_data_lo;
+      assign fetch_instr_v_lo = icache_data_v_lo;
       assign fetch_partial_lo = '0;
       assign fetch_linear_lo = '0;
     end
