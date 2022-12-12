@@ -89,8 +89,58 @@ module bp_me_cache_slice
      ,.cache_data_yumi_o(cache_data_yumi_li)
      );
 
+   logic [l2_banks_p-1:0][dma_pkt_width_lp-1:0] prefetcher_pkt_li;
+   logic [l2_banks_p-1:0]                       prefetcher_pkt_v_li;
+   logic [l2_banks_p-1:0]                       prefetcher_pkt_ready_lo;
+
+   logic [l2_banks_p-1:0][l2_fill_width_p-1:0]  prefetcher_data_lo;
+   logic [l2_banks_p-1:0]                       prefetcher_data_v_lo;
+   logic [l2_banks_p-1:0]                       prefetcher_data_yumi_li;
+
+   logic [l2_banks_p-1:0][l2_fill_width_p-1:0]  prefetcher_data_li;
+   logic [l2_banks_p-1:0]                       prefetcher_data_v_li;
+   logic [l2_banks_p-1:0]                       prefetcher_data_ready_lo;
+
+
   for (genvar i = 0; i < l2_banks_p; i++)
     begin : bank
+      bsg_cache_prefetcher #(
+        .addr_width_p(daddr_width_p)
+        ,.data_width_p(l2_data_width_p)
+        ,.block_size_in_words_p(l2_block_size_in_words_p)
+        ,.buffers_p(1)
+        ,.buffer_depth_p(7)
+        ,.stride_p('h40)
+      ) prefetcher (
+        .clk_i(clk_i)
+        ,.reset_i(reset_i)
+
+        // upstream from cache
+        ,.up_pkt_i(prefetcher_pkt_li[i])
+        ,.up_pkt_v_i(prefetcher_pkt_v_li[i])
+        ,.up_pkt_ready_o(prefetcher_pkt_ready_lo[i])
+
+        ,.up_data_o(prefetcher_data_lo[i])
+        ,.up_data_v_o(prefetcher_data_v_lo[i])
+        ,.up_data_yumi_i(prefetcher_data_yumi_li[i])
+
+        ,.up_data_i(prefetcher_data_li[i])
+        ,.up_data_v_i(prefetcher_data_v_li[i])
+        ,.up_data_ready_o(prefetcher_data_ready_lo[i])
+
+        // downstream to DMA
+        ,.down_pkt_o(dma_pkt_o[i])
+        ,.down_pkt_v_o(dma_pkt_v_o[i])
+        ,.down_pkt_yumi_i(dma_pkt_ready_and_i[i] & dma_pkt_v_o[i])
+
+        ,.down_data_i(dma_data_i[i])
+        ,.down_data_v_i(dma_data_v_i[i])
+        ,.down_data_ready_o(dma_data_ready_and_o[i])
+
+        ,.down_data_o(dma_data_o[i])
+        ,.down_data_v_o(dma_data_v_o[i])
+        ,.down_data_yumi_i(dma_data_ready_and_i[i] & dma_data_v_o[i])
+      );
       bsg_cache
        #(.addr_width_p(daddr_width_p)
          ,.data_width_p(l2_data_width_p)
@@ -121,17 +171,17 @@ module bp_me_cache_slice
          ,.v_o(cache_data_v_lo[i])
          ,.yumi_i(cache_data_yumi_li[i])
 
-         ,.dma_pkt_o(dma_pkt_o[i])
-         ,.dma_pkt_v_o(dma_pkt_v_o[i])
-         ,.dma_pkt_yumi_i(dma_pkt_ready_and_i[i] & dma_pkt_v_o[i])
+         ,.dma_pkt_o(prefetcher_pkt_li[i])
+         ,.dma_pkt_v_o(prefetcher_pkt_v_li[i])
+         ,.dma_pkt_yumi_i(prefetcher_pkt_ready_lo[i])
 
-         ,.dma_data_i(dma_data_i[i])
-         ,.dma_data_v_i(dma_data_v_i[i])
-         ,.dma_data_ready_o(dma_data_ready_and_o[i])
+         ,.dma_data_i(prefetcher_data_lo[i])
+         ,.dma_data_v_i(prefetcher_data_v_lo[i])
+         ,.dma_data_ready_o(prefetcher_data_yumi_li[i])
 
-         ,.dma_data_o(dma_data_o[i])
-         ,.dma_data_v_o(dma_data_v_o[i])
-         ,.dma_data_yumi_i(dma_data_ready_and_i[i] & dma_data_v_o[i])
+         ,.dma_data_o(prefetcher_data_li[i])
+         ,.dma_data_v_o(prefetcher_data_v_li[i])
+         ,.dma_data_yumi_i(prefetcher_data_ready_lo[i])
 
          ,.v_we_o()
          );
