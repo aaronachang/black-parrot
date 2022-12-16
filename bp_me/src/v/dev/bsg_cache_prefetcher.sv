@@ -279,7 +279,7 @@ module bsg_cache_prefetcher
           counter_clear = 1'b1;
         end else if (write_req) begin
           dma_state_n = WRITE_DMA;
-        end else if (prefetch_fifo_v_lo & data_fifo_ready_lo) begin
+        end else if (prefetch_fifo_v_lo & data_fifo_ready_lo & prefetch_pkt_lo.addr !== addr_fifo_data_lo) begin
           dma_state_n = PREFETCH;
           counter_clear = 1'b1;
         end else begin
